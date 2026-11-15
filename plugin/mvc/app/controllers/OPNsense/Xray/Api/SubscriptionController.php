@@ -1,0 +1,178 @@
+<?php
+
+namespace OPNsense\Xray\Api;
+
+use OPNsense\Base\ApiMutableModelControllerBase;
+use OPNsense\Core\Config;
+
+require_once '/usr/local/opnsense/scripts/Xray/xray-subscriptions.php';
+
+class SubscriptionController extends ApiMutableModelControllerBase
+{
+    protected static $internalModelClass = '\\OPNsense\\Xray\\Subscription';
+    protected static $internalModelName = 'subscription';
+
+    private static function validUuid(string $uuid): bool
+    {
+        return (bool)preg_match(
+            '/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iD', $uuid
+        );
+    }
+
+    public function searchItemAction()
+    {
+        // Never expose subscription URLs, share links or proxy credentials in grid responses.
+        return $this->searchBase('subscription', ['enabled', 'name', 'source_type', 'node_count', 'updated_at']);
+    }
+
+    public function getItemAction($uuid = null)
+    {
+        return $this->getBase('subscription', 'subscription', $uuid);
+    }
+
+    public function addItemAction()
+    {
+        return $this->addBase('subscription', 'subscription');
+    }
+
+    public function setItemAction($uuid)
+    {
+        return $this->setBase('subscription', 'subscription', $uuid);
+    }
+
+    protected function setBaseHook($node)
+    {
+        // Editing a source always invalidates its cached nodes. The UI then refreshes it.
+        $node->setNodes(['outbounds' => '', 'node_count' => '0', 'updated_at' => '']);
+    }
+
+    public function toggleItemAction($uuid, $enabled = null)
+    {
+        return $this->toggleBase('subscription', $uuid, $enabled);
+    }
+
+    public function delItemAction($uuid)
+    {
+        if (!self::validUuid((string)$uuid)) {
+            return ['result' => 'failed', 'message' => 'Invalid subscription ID'];
+        }
+        $cfg = Config::getInstance()->object();
+        foreach ($cfg->OPNsense->xray->instances->instance ?? [] as $instance) {
+            if ((string)($instance->subscription_uuid ?? '') === $uuid) {
+                return ['result' => 'failed', 'message' => 'This subscription is used by an instance'];
+            }
+        }
+        return $this->delBase('subscription', $uuid);
+    }
+
+    private function loadItem(string $uuid): ?array
+    {
+        if (!self::validUuid($uuid)) {
+            return null;
+        }
+        $response = $this->getBase('subscription', 'subscription', $uuid);
+        return $response['subscription'] ?? null;
+    }
+
+    public function nodesAction($uuid)
+    {
+        $source = $this->loadItem((string)$uuid);
+        if ($source === null) {
+            return ['result' => 'failed', 'message' => 'Subscription not found'];
+        }
+        $outbounds = json_decode((string)($source['outbounds'] ?? ''), true);
+        return [
+            'result' => 'ok',
+            'nodes' => is_array($outbounds) ? xray_subscription_node_summaries($outbounds) : [],
+        ];
+    }
+
+    private static function download(string $url): string
+    {
+        $parts = parse_url($url);
+        $host = is_array($parts) ? ($parts['host'] ?? '') : '';
+        if (!is_array($parts) || ($parts['scheme'] ?? '') !== 'https'
+            || !is_string($host) || !preg_match('/^[A-Za-z0-9.-]{1,253}$/D', $host)
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
+            throw new \InvalidArgumentException('Subscription URL must be HTTPS without credentials or fragment');
+        }
+        // Block literal and DNS-resolved private/reserved addresses.
+        $records = dns_get_record($host, DNS_A | DNS_AAAA);
+        if (empty($records)) {
+            throw new \RuntimeException('Subscription host could not be resolved');
+        }
+        foreach ($records as $record) {
+            $address = $record['ip'] ?? $record['ipv6'] ?? null;
+            if ($address !== null && !filter_var(
+                $address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+            )) {
+                throw new \InvalidArgumentException('Subscription host resolves to a private or reserved address');
+            }
+        }
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'follow_location' => 0,
+                'ignore_errors' => true,
+                'header' => "Accept: text/plain, application/json\r\nUser-Agent: os-xray/PR2\r\n",
+            ],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+        ]);
+        $stream = @fopen($url, 'rb', false, $context);
+        if ($stream === false) {
+            throw new \RuntimeException('Cannot download subscription (HTTPS connection failed)');
+        }
+        try {
+            $meta = stream_get_meta_data($stream);
+            $status = $meta['wrapper_data'][0] ?? '';
+            if (!preg_match('/^HTTP\/\S+\s+200(?:\s|$)/', $status)) {
+                throw new \RuntimeException('Subscription server did not return HTTP 200');
+            }
+            $body = stream_get_contents($stream, 1048577);
+            if ($body === false || strlen($body) > 1048576) {
+                throw new \RuntimeException('Subscription response is larger than 1 MiB');
+            }
+            return $body;
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function refreshAction($uuid)
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'failed', 'message' => 'POST required'];
+        }
+        $source = $this->loadItem((string)$uuid);
+        if ($source === null) {
+            return ['result' => 'failed', 'message' => 'Subscription not found'];
+        }
+        try {
+            $kind = (string)($source['source_type'] ?? 'url');
+            if ($kind === 'url') {
+                $body = self::download(trim((string)($source['url'] ?? '')));
+            } elseif ($kind === 'links') {
+                $body = (string)($source['links'] ?? '');
+            } else {
+                throw new \InvalidArgumentException('Unknown subscription source type');
+            }
+            $outbounds = xray_subscription_parse($body, [ImportController::class, 'parseVless']);
+            $json = json_encode($outbounds, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            Config::getInstance()->lock();
+            $node = $this->getModel()->getNodeByReference('subscription.' . $uuid);
+            if ($node === null) {
+                throw new \RuntimeException('Subscription no longer exists');
+            }
+            $node->setNodes([
+                'outbounds' => $json,
+                'node_count' => (string)count($outbounds),
+                'updated_at' => gmdate('Y-m-d H:i:s') . ' UTC',
+            ]);
+            $this->save();
+            return ['result' => 'ok', 'count' => count($outbounds)];
+        } catch (\Throwable $e) {
+            // Keep the previous working cache on a failed refresh, and do not log tokenized URLs.
+            return ['result' => 'failed', 'message' => $e->getMessage()];
+        }
+    }
+}
