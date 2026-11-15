@@ -111,3 +111,100 @@ function xray_subscription_node_summaries(array $outbounds): array
     }
     return $nodes;
 }
+
+/**
+ * Read HTTPS subscription content without PHP allow_url_fopen.
+ * Only HTTPS URLs are accepted; do not log raw fetch output containing tokens.
+ */
+function xray_subscription_download(string $url): string
+{
+    $parts = parse_url($url);
+    $host = is_array($parts) ? ($parts['host'] ?? '') : '';
+    if (!is_array($parts) || ($parts['scheme'] ?? '') !== 'https'
+        || !is_string($host) || !preg_match('/^[A-Za-z0-9.-]{1,253}$/D', $host)
+        || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
+        throw new \InvalidArgumentException('Subscription URL must be HTTPS without credentials or fragment');
+    }
+    // Block literal and DNS-resolved private/reserved addresses.
+    $records = dns_get_record($host, DNS_A | DNS_AAAA);
+    if (empty($records)) {
+        throw new \RuntimeException('Subscription host could not be resolved');
+    }
+    foreach ($records as $record) {
+        $address = $record['ip'] ?? $record['ipv6'] ?? null;
+        if ($address !== null && !filter_var(
+            $address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        )) {
+            throw new \InvalidArgumentException('Subscription host resolves to a private or reserved address');
+        }
+    }
+    // OPNsense's WebGui php.ini deliberately disables allow_url_fopen.
+    // Use the system HTTPS fetch utility instead of fopen(https://...).
+    // Keep TLS verification enabled and disable automatic 302 redirects.
+    $temp = tempnam(sys_get_temp_dir(), 'xray-sub-');
+    if ($temp === false || !chmod($temp, 0600)) {
+        throw new \RuntimeException('Cannot create private subscription download file');
+    }
+
+    try {
+        $command = '/usr/bin/fetch -A -d -q -T 12 -o '
+            . escapeshellarg($temp) . ' ' . escapeshellarg($url) . ' 2>&1';
+        $output = [];
+        $status = 1;
+        exec($command, $output, $status);
+        if ($status !== 0) {
+            // fetch diagnostic messages may contain the tokenized URL;
+            // classify the failure without returning or logging raw output.
+            $details = strtolower(implode("\n", $output));
+            if (str_contains($details, 'certificate') || str_contains($details, 'ssl')
+                || str_contains($details, 'tls')) {
+                $reason = 'TLS certificate or handshake error';
+            } elseif (str_contains($details, 'refused')) {
+                $reason = 'connection refused';
+            } elseif (str_contains($details, 'timed out') || str_contains($details, 'timeout')) {
+                $reason = 'connection timeout';
+            } elseif (str_contains($details, 'resolve') || str_contains($details, 'no address')
+                || str_contains($details, 'name lookup')) {
+                $reason = 'DNS lookup failed';
+            } elseif (preg_match('/\b(30[0-9]|40[0-9]|50[0-9])\b/', $details, $matches)) {
+                $reason = 'HTTP ' . $matches[1];
+            } else {
+                $reason = 'network or HTTP error';
+            }
+            throw new \RuntimeException('Cannot download subscription (' . $reason . ')');
+        }
+        $size = filesize($temp);
+        if ($size === false || $size > 1048576) {
+            throw new \RuntimeException('Subscription response exceeds 1 MiB');
+        }
+        $body = file_get_contents($temp);
+        if ($body === false || $body === '') {
+            throw new \RuntimeException('Subscription download is empty or unreadable');
+        }
+        return $body;
+    } finally {
+        @unlink($temp);
+    }
+}
+
+function xray_subscription_import(string $type, string $url, string $links, callable $parseVless): array
+{
+    if ($type === 'url') {
+        $body = xray_subscription_download(trim($url));
+    } elseif ($type === 'links') {
+        $body = $links;
+    } else {
+        throw new InvalidArgumentException('Unknown subscription source type');
+    }
+    return xray_subscription_parse($body, $parseVless);
+}
+
+/** Keep the selected node pinned when a provider refreshes its list. */
+function xray_subscription_has_selected_node(array $outbounds, string $selected): bool
+{
+    if ($selected === '') return true;
+    foreach ($outbounds as $outbound) {
+        if (($outbound['tag'] ?? null) === $selected) return true;
+    }
+    return false;
+}
