@@ -208,3 +208,9 @@ function xray_subscription_has_selected_node(array $outbounds, string $selected)
     }
     return false;
 }
+
+/** Schedule due checks against the last attempt, including failed attempts. */
+function xray_subscription_due(int $interval, int $lastChecked, int $now): bool
+{
+    return $interval > 0 && ($lastChecked <= 0 || $now - $lastChecked >= $interval * 60);
+}
