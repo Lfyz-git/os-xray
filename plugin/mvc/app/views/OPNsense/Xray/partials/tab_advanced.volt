@@ -36,14 +36,20 @@
             </select>
         </div>
         <div class="form-group xray-json-editor-group">
-            <label for="xrayAdvancedJson" id="xrayAdvancedJsonLabel">Outbounds JSON</label>
+            <label for="xrayAdvancedJson">Applied Xray configuration (JSON)</label>
             <textarea class="form-control" id="xrayAdvancedJson" rows="28" spellcheck="false"
-                      readonly placeholder="Choose an instance to load its outbounds."></textarea>
+                      readonly placeholder="Choose an instance to load its applied Xray configuration."></textarea>
         </div>
-        <button type="button" class="btn btn-primary" id="xrayAdvancedSave" disabled>Save manual JSON</button>
-        <p id="xrayAdvancedNote" class="text-muted" style="margin-top:10px;" role="status">
-            For subscribed instances, this is a read-only preview of the imported outbounds.
-            Edit the subscription on the Subscriptions tab.
+        <div class="clearfix" style="margin:10px 0;">
+            <button type="button" class="btn btn-default btn-sm" id="xrayAdvancedCopy" disabled>
+                <i class="fa fa-copy"></i> Copy JSON
+            </button>
+            <span id="xrayAdvancedSummary" class="text-muted" style="margin-left:12px;" role="status"></span>
+        </div>
+        <p id="xrayAdvancedNote" class="text-muted" role="status">
+            Displays the last applied Xray configuration for this instance, including inbounds,
+            outbounds and routing. Read-only; edit settings in their respective tabs.
+            This JSON contains connection credentials — do not share it publicly.
         </p>
     </div>
 </div>
