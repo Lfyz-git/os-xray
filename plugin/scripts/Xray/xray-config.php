@@ -25,10 +25,30 @@ function xray_build_config(array $c): array
     if ($raw === '') {
         throw new InvalidArgumentException("outbound_config is empty");
     }
-    $outbound = json_decode($raw, true);
-    if (!is_array($outbound) || empty($outbound['protocol'])) {
-        throw new InvalidArgumentException("outbound_config must be a valid Xray outbound JSON object");
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        throw new InvalidArgumentException("outbound_config must be a JSON outbound object or array");
     }
+    $outbounds = array_is_list($decoded) ? $decoded : [$decoded];
+    if (!$outbounds) {
+        throw new InvalidArgumentException("At least one Xray outbound is required");
+    }
+    $tags = ['direct' => true];  // The local bypass outbound is always reserved.
+    foreach ($outbounds as $outbound) {
+        if (!is_array($outbound) || !is_string($outbound['protocol'] ?? null)
+            || trim($outbound['protocol']) === '') {
+            throw new InvalidArgumentException("Each outbound must define a protocol");
+        }
+        $tag = $outbound['tag'] ?? null;
+        if ($tag === null && count($outbounds) === 1) {
+            continue; // Xray accepts an untagged default outbound.
+        }
+        if (!is_string($tag) || trim($tag) === '' || isset($tags[$tag])) {
+            throw new InvalidArgumentException("Outbound tags must be non-empty, unique and not 'direct'");
+        }
+        $tags[$tag] = true;
+    }
+    $outbounds[] = ['tag' => 'direct', 'protocol' => 'freedom'];
     return [
         'log'      => ['loglevel' => $c['loglevel'] ?? 'warning'],
         'inbounds' => [[
@@ -38,7 +58,7 @@ function xray_build_config(array $c): array
             'protocol' => 'socks',
             'settings' => ['auth' => 'noauth', 'udp' => true, 'ip' => $c['socks5_listen'] ?? '127.0.0.1'],
         ]],
-        'outbounds' => [$outbound, ['tag' => 'direct', 'protocol' => 'freedom']],
+        'outbounds' => $outbounds,
         'routing'   => xray_build_routing($c['bypass_networks'] ?? ''),
     ];
 }
