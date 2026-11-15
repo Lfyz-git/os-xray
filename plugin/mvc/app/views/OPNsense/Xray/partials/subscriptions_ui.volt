@@ -236,17 +236,10 @@ $(function () {
         fillInstanceNodes($(this).val(), '');
     });
 
-    // Advanced shows the actual source of outbounds for the selected instance.
-    // Subscription-owned outbounds are read-only here: manual edits would be
-    // ignored by Xray and overwritten by the next subscription refresh.
+    // Advanced displays exactly the last applied config file, never a newly
+    // assembled subscription preview or an unsaved candidate.
     function advancedStatus(text) {
         $('#xrayAdvancedNote').text(text);
-    }
-
-    function advancedMode(label, editable) {
-        $('#xrayAdvancedJsonLabel').text(label);
-        $('#xrayAdvancedJson').prop('readOnly', !editable);
-        $('#xrayAdvancedSave').prop('disabled', !editable).toggle(editable);
     }
 
     function reloadAdvancedInstances() {
@@ -270,106 +263,60 @@ $(function () {
     $('#xrayAdvancedInstance').on('change', function () {
         var uuid = $(this).val();
         $('#xrayAdvancedJson').val('');
-        advancedMode('Outbounds JSON', false);
+        $('#xrayAdvancedCopy').prop('disabled', true);
+        $('#xrayAdvancedSummary').text('');
         if (!uuid) {
-            advancedStatus('Choose an instance to view its outbounds.');
+            advancedStatus('Choose an instance to view its applied Xray configuration.');
             return;
         }
-        advancedStatus('Loading instance configuration...');
-        $.getJSON('/api/xray/instance/getItem/' + encodeURIComponent(uuid))
-            .done(function (data) {
+        advancedStatus('Reading the last applied Xray configuration...');
+        $.post('/api/xray/service/config/' + encodeURIComponent(uuid), {})
+            .done(function (response) {
+                // Ignore a delayed response for a previously selected instance.
                 if ($('#xrayAdvancedInstance').val() !== uuid) return;
-                var instance = data.instance;
-                if (!instance) {
-                    advancedStatus('Instance configuration was not found.');
+                if (!response || response.result !== 'ok' || !response.config) {
+                    advancedStatus((response && response.message) ||
+                        'No applied configuration is available. Save and Apply the instance first.');
                     return;
                 }
-                var sourceId = (instance.subscription_uuid || '').trim();
-                if (!sourceId) {
-                    var raw = instance.outbound_config || '';
-                    try {
-                        if (raw) raw = JSON.stringify(JSON.parse(raw), null, 2);
-                    } catch (_) {
-                        // Show malformed manual input as-is so the user can fix it.
-                    }
-                    $('#xrayAdvancedJson').val(raw);
-                    advancedMode('Manual Outbounds JSON', true);
-                    advancedStatus(raw ?
-                        'Manual outbounds are active. Save here, then Apply to update Xray.' :
-                        'No manual outbounds configured for this instance.');
-                    return;
+                try {
+                    var formatted = JSON.stringify(response.config, null, 2);
+                    $('#xrayAdvancedJson').val(formatted);
+                    $('#xrayAdvancedCopy').prop('disabled', false);
+                    var state = response.xray_core === 'running' ? 'Xray running' : 'Xray stopped';
+                    var defaultTag = response.default_outbound || '(not defined)';
+                    $('#xrayAdvancedSummary').text(state + ' | Default outbound: ' + defaultTag);
+                    advancedStatus(
+                        'Last applied on-disk config. Includes all declared outbounds, inbounds ' +
+                        'and routing rules. The first outbound is the default for traffic ' +
+                        'without a matching routing rule; other outbounds can still be ' +
+                        'selected by routing. Contains credentials — do not publish it.'
+                    );
+                } catch (e) {
+                    advancedStatus('Could not display applied JSON: ' + e.message);
                 }
-
-                advancedMode('Subscription Outbounds JSON (read-only)', false);
-                $.getJSON('/api/xray/subscription/getItem/' + encodeURIComponent(sourceId))
-                    .done(function (response) {
-                        if ($('#xrayAdvancedInstance').val() !== uuid) return;
-                        var source = response.subscription;
-                        if (!source || !source.outbounds) {
-                            advancedStatus('The selected subscription has no imported nodes. Refresh it first.');
-                            return;
-                        }
-                        try {
-                            var list = JSON.parse(source.outbounds);
-                            if (!Array.isArray(list) || !list.length) {
-                                throw new Error('No outbound nodes');
-                            }
-                            var selected = instance.selected_outbound || '';
-                            if (selected) {
-                                var selectedIndex = list.findIndex(function (item) {
-                                    return item && item.tag === selected;
-                                });
-                                if (selectedIndex < 0) {
-                                    advancedStatus('Selected node is missing from the subscription.');
-                                    return;
-                                }
-                                if (selectedIndex > 0) {
-                                    list.unshift(list.splice(selectedIndex, 1)[0]);
-                                }
-                            }
-                            $('#xrayAdvancedJson').val(JSON.stringify(list, null, 2));
-                            advancedStatus(
-                                'Source: subscription "' + (source.name || sourceId) +
-                                '". ' + list.length + ' outbound(s). ' +
-                                'The first outbound is the default. This JSON is generated from the ' +
-                                'subscription and cannot be edited here; use Subscriptions to refresh it.'
-                            );
-                        } catch (e) {
-                            advancedStatus('Cannot read subscription JSON: ' + e.message);
-                        }
-                    })
-                    .fail(function (xhr) {
-                        if ($('#xrayAdvancedInstance').val() === uuid) {
-                            advancedStatus('Cannot load subscription outbounds: HTTP ' + xhr.status);
-                        }
-                    });
             })
             .fail(function (xhr) {
                 if ($('#xrayAdvancedInstance').val() === uuid) {
-                    advancedStatus('Cannot load instance configuration: HTTP ' + xhr.status);
+                    advancedStatus('Cannot read applied configuration: HTTP ' + xhr.status);
                 }
             });
     });
 
-    $('#xrayAdvancedSave').on('click', function () {
-        var uuid = $('#xrayAdvancedInstance').val();
-        if (!uuid || $(this).prop('disabled')) return;
-        var raw = $.trim($('#xrayAdvancedJson').val() || '');
-        try {
-            if (raw) JSON.parse(raw);
-        } catch (e) {
-            advancedStatus('Invalid JSON: ' + e.message);
-            return;
+    $('#xrayAdvancedCopy').on('click', function () {
+        if ($(this).prop('disabled')) return;
+        var value = $('#xrayAdvancedJson').val();
+        if (!value) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(function () {
+                advancedStatus('Copied applied JSON. It contains credentials; handle it securely.');
+            }).catch(function () {
+                advancedStatus('Browser blocked clipboard access. Select and copy the text manually.');
+            });
+        } else {
+            $('#xrayAdvancedJson').trigger('focus').trigger('select');
+            advancedStatus('Select and copy the JSON manually. It contains credentials.');
         }
-        $.post('/api/xray/instance/setItem/' + encodeURIComponent(uuid), {
-            instance: {outbound_config: raw}
-        }).done(function (data) {
-            advancedStatus(data.result === 'saved' ?
-                'Saved. Click Apply to activate changes.' :
-                'Save failed: ' + JSON.stringify(data.validations || data.result));
-        }).fail(function (xhr) {
-            advancedStatus('Save failed: HTTP ' + xhr.status);
-        });
     });
 });
 </script>
