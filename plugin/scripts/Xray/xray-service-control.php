@@ -522,6 +522,44 @@ function do_status_all(): void
     echo json_encode($result) . "\n";
 }
 
+/**
+ * Read the most recently applied Xray configuration, not the subscription
+ * cache or a fresh candidate. Includes credentials; return only via the
+ * authenticated service API. Never write this JSON to logs.
+ */
+function do_applied_config(string $inst_uuid): void
+{
+    if ($inst_uuid === '') {
+        echo json_encode(['result' => 'failed', 'message' => 'Instance UUID required']) . "\n";
+        return;
+    }
+    $path = xray_conf_path($inst_uuid);
+    if (!is_file($path) || !is_readable($path)) {
+        echo json_encode(['result' => 'failed', 'message' => 'No applied Xray configuration found']) . "\n";
+        return;
+    }
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        echo json_encode(['result' => 'failed', 'message' => 'Cannot read applied Xray configuration']) . "\n";
+        return;
+    }
+    $config = json_decode($contents, true);
+    if (!is_array($config) || json_last_error() !== JSON_ERROR_NONE) {
+        echo json_encode(['result' => 'failed', 'message' => 'Applied configuration is not valid JSON']) . "\n";
+        return;
+    }
+    $outbounds = $config['outbounds'] ?? [];
+    $defaultTag = is_array($outbounds) && isset($outbounds[0]) && is_array($outbounds[0])
+        ? (string)($outbounds[0]['tag'] ?? '(untagged)')
+        : '';
+    echo json_encode([
+        'result' => 'ok',
+        'config' => $config,
+        'xray_core' => proc_is_running(xray_pid_path($inst_uuid)) ? 'running' : 'stopped',
+        'default_outbound' => $defaultTag,
+    ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+}
+
 // A bounded, secret-free summary shared by the boot syshook and plugin hook.
 // Replace the previous event; never persist raw validator/controller output.
 function xray_boot_log(string $state): void
@@ -584,6 +622,10 @@ switch ($action) {
 
     case 'statusall':
         do_status_all();
+        break;
+
+    case 'config':
+        do_applied_config($inst_uuid);
         break;
 
     case 'validate':
