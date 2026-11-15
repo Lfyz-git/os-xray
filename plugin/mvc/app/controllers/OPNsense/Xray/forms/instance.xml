@@ -18,10 +18,10 @@
     </field>
     <field>
         <id>instance.outbound_config</id>
-        <label>Outbound Config (JSON)</label>
+        <label>Outbounds (JSON)</label>
         <type>textbox</type>
-        <help>xray-core outbound object. Use "Import VLESS link" above to auto-fill, or paste/write the outbound JSON directly. The backend wraps it with SOCKS5 inbound and routing on save.</help>
-        <hint>{"tag":"proxy","protocol":"vless","settings":{...},"streamSettings":{...}}</hint>
+        <help>Add, duplicate, reorder or edit outbounds using the editor above this field. Advanced: edit the complete JSON array here. The first outbound is the default for unmatched traffic; tag "direct" is reserved for local bypass.</help>
+        <hint>[{"tag":"proxy","protocol":"vless","settings":{...},"streamSettings":{...}}]</hint>
     </field>
 
     <field>
