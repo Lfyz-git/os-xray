@@ -40,7 +40,7 @@ $(function () {
                 $('<td>').text(row.node_count || '0').appendTo($tr);
                 var interval = parseInt(row.refresh_interval, 10);
                 if (!Number.isFinite(interval)) interval = 360;
-                $('<td>').text(interval === 0 ? 'Manual' : interval + ' min').appendTo($tr);
+                $('<td>').text(row.source_type === 'links' || interval === 0 ? 'Manual' : interval + ' min').appendTo($tr);
                 var $last = $('<td>').text(row.updated_at || '—').appendTo($tr);
                 if (row.last_error) $last.attr('title', row.last_error);
                 var $actions = $('<td>').appendTo($tr);
@@ -111,6 +111,7 @@ $(function () {
         var isUrl = $('#xraySourceType').val() === 'url';
         $('#xraySourceUrlGroup').toggle(isUrl);
         $('#xraySourceLinksGroup').toggle(!isUrl);
+        $('#xraySourceInterval').closest('.form-group').toggle(isUrl);
     }
 
     function resetEditor() {
