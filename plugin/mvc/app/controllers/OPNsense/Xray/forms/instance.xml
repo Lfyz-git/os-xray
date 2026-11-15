@@ -17,11 +17,16 @@
         <hint>e.g. default, work, streaming</hint>
     </field>
     <field>
-        <id>instance.outbound_config</id>
-        <label>Outbounds (JSON)</label>
-        <type>textbox</type>
-        <help>Add, duplicate, reorder or edit outbounds using the editor above this field. Advanced: edit the complete JSON array here. The first outbound is the default for unmatched traffic; tag "direct" is reserved for local bypass.</help>
-        <hint>[{"tag":"proxy","protocol":"vless","settings":{...},"streamSettings":{...}}]</hint>
+        <id>instance.subscription_uuid</id>
+        <label>Subscription</label>
+        <type>text</type>
+        <help>Select the source of proxy nodes. Create and refresh sources on the Subscriptions tab.</help>
+    </field>
+    <field>
+        <id>instance.selected_outbound</id>
+        <label>Active Node</label>
+        <type>text</type>
+        <help>The selected node is used for unmatched traffic. Balancer selection will be added separately.</help>
     </field>
 
     <field>
