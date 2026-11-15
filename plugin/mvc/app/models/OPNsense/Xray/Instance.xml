@@ -16,6 +16,12 @@
                 <Default>default</Default>
                 <Required>N</Required>
             </name>
+            <subscription_uuid type="TextField">
+                <Required>N</Required>
+            </subscription_uuid>
+            <selected_outbound type="TextField">
+                <Required>N</Required>
+            </selected_outbound>
             <outbound_config type="TextField">
                 <Required>N</Required>
                 <Default></Default>
