@@ -12,7 +12,7 @@
             <div id="xraySourceNotice" class="alert" style="display:none;"></div>
             <table class="table table-striped table-condensed">
                 <thead><tr>
-                    <th>Name</th><th>Type</th><th>Nodes</th><th>Last refreshed</th><th>Actions</th>
+                    <th>Name</th><th>Type</th><th>Nodes</th><th>Auto-refresh</th><th>Last refreshed</th><th>Actions</th>
                 </tr></thead>
                 <tbody id="xraySourceRows"></tbody>
             </table>
@@ -34,6 +34,13 @@
                     <div class="form-group" id="xraySourceUrlGroup">
                         <label for="xraySourceUrl">Subscription URL</label>
                         <input type="url" class="form-control" id="xraySourceUrl" placeholder="https://provider.example/subscription/...">
+                    </div>
+                    <div class="form-group">
+                        <label for="xraySourceInterval">Auto-refresh interval (minutes)</label>
+                        <input type="number" class="form-control" id="xraySourceInterval"
+                               min="0" max="10080" step="15" value="360" style="max-width:220px;">
+                        <span class="help-block">Default: 360 (every 6 hours). Set 0 for manual-only updates.
+                            Automatic refresh applies changed nodes only if Xray validates the updated configuration.</span>
                     </div>
                     <div class="form-group" id="xraySourceLinksGroup" style="display:none;">
                         <label for="xraySourceLinks">VLESS links (one per line, or base64 subscription content)</label>
