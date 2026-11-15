@@ -28,7 +28,7 @@ $(function () {
         sources(function (rows) {
             var $body = $('#xraySourceRows').empty();
             if (!rows.length) {
-                $('<tr>').append($('<td colspan="5" class="text-muted">')
+                $('<tr>').append($('<td colspan="6" class="text-muted">')
                     .text('No subscriptions yet. Add an HTTPS URL or paste VLESS links.'))
                     .appendTo($body);
             }
@@ -38,7 +38,11 @@ $(function () {
                 $('<td>').text(row.name || uuid).appendTo($tr);
                 $('<td>').text(row.source_type === 'links' ? 'VLESS links' : 'HTTPS URL').appendTo($tr);
                 $('<td>').text(row.node_count || '0').appendTo($tr);
-                $('<td>').text(row.updated_at || '—').appendTo($tr);
+                var interval = parseInt(row.refresh_interval, 10);
+                if (!Number.isFinite(interval)) interval = 360;
+                $('<td>').text(interval === 0 ? 'Manual' : interval + ' min').appendTo($tr);
+                var $last = $('<td>').text(row.updated_at || '—').appendTo($tr);
+                if (row.last_error) $last.attr('title', row.last_error);
                 var $actions = $('<td>').appendTo($tr);
                 function action(text, handler) {
                     return $('<button type="button" class="btn btn-xs btn-default" style="margin-right:4px;">')
@@ -113,6 +117,7 @@ $(function () {
         editSourceId = '';
         $('#xraySourceName,#xraySourceUrl,#xraySourceLinks').val('');
         $('#xraySourceType').val('url');
+        $('#xraySourceInterval').val('360');
         $('#xraySourceEditorTitle').text('Add subscription');
         switchSourceInputs();
         $('#xraySourceEditor').show();
@@ -127,6 +132,7 @@ $(function () {
                 $('#xraySourceType').val(src.source_type || 'url');
                 $('#xraySourceUrl').val(src.url || '');
                 $('#xraySourceLinks').val(src.links || '');
+                $('#xraySourceInterval').val(src.refresh_interval == null ? '360' : src.refresh_interval);
                 $('#xraySourceEditorTitle').text('Edit subscription');
                 switchSourceInputs();
                 $('#xraySourceEditor').show();
@@ -144,13 +150,18 @@ $(function () {
             sourceMessage('Set a name and provide an HTTPS URL or VLESS links.', true);
             return;
         }
+        var interval = Number($('#xraySourceInterval').val());
+        if (!Number.isInteger(interval) || interval < 0 || interval > 10080) {
+            sourceMessage('Interval must be 0–10080 minutes.', true);
+            return;
+        }
         var id = editSourceId;
         var $btn = $(this).prop('disabled', true);
         var endpoint = '/api/xray/subscription/' + (id ? 'setItem/' + encodeURIComponent(id) : 'addItem');
         $.ajax({
             url: endpoint, method: 'POST', dataType: 'json',
             data: {subscription: {
-                enabled: '1', name: name, source_type: type,
+                enabled: '1', name: name, source_type: type, refresh_interval: interval,
                 url: $('#xraySourceUrl').val(), links: $('#xraySourceLinks').val()
             }}
         }).done(function (data) {
