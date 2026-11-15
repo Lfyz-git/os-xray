@@ -48,6 +48,24 @@ function xray_build_config(array $c): array
         }
         $tags[$tag] = true;
     }
+    $selected = trim((string)($c['selected_outbound'] ?? ''));
+    if ($selected !== '') {
+        $selectedIndex = null;
+        foreach ($outbounds as $i => $outbound) {
+            if (($outbound['tag'] ?? '') === $selected) {
+                $selectedIndex = $i;
+                break;
+            }
+        }
+        if ($selectedIndex === null) {
+            throw new InvalidArgumentException('Selected outbound is not present in the source');
+        }
+        if ($selectedIndex !== 0) {
+            $preferred = $outbounds[$selectedIndex];
+            array_splice($outbounds, $selectedIndex, 1);
+            array_unshift($outbounds, $preferred);
+        }
+    }
     $outbounds[] = ['tag' => 'direct', 'protocol' => 'freedom'];
     return [
         'log'      => ['loglevel' => $c['loglevel'] ?? 'warning'],
