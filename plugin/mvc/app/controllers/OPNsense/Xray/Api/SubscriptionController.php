@@ -27,7 +27,16 @@ class SubscriptionController extends ApiMutableModelControllerBase
 
     public function getItemAction($uuid = null)
     {
-        return $this->getBase('subscription', 'subscription', $uuid);
+        $result = $this->getBase('subscription', 'subscription', $uuid);
+        // OPNsense OptionField::getNodeData() returns the choices map, not
+        // the selected scalar; the editor needs the actual stored value.
+        if (self::validUuid((string)$uuid) && isset($result['subscription'])) {
+            $node = $this->getModel()->getNodeByReference('subscription.' . $uuid);
+            if ($node !== null) {
+                $result['subscription']['source_type'] = (string)$node->source_type;
+            }
+        }
+        return $result;
     }
 
     public function addItemAction()
@@ -38,12 +47,6 @@ class SubscriptionController extends ApiMutableModelControllerBase
     public function setItemAction($uuid)
     {
         return $this->setBase('subscription', 'subscription', $uuid);
-    }
-
-    protected function setBaseHook($node)
-    {
-        // Editing a source always invalidates its cached nodes. The UI then refreshes it.
-        $node->setNodes(['outbounds' => '', 'node_count' => '0', 'updated_at' => '']);
     }
 
     public function toggleItemAction($uuid, $enabled = null)
@@ -70,8 +73,18 @@ class SubscriptionController extends ApiMutableModelControllerBase
         if (!self::validUuid($uuid)) {
             return null;
         }
-        $response = $this->getBase('subscription', 'subscription', $uuid);
-        return $response['subscription'] ?? null;
+        // Read raw values from the model. In particular, source_type is
+        // an OptionField and getBase() exposes a choices map for forms.
+        $node = $this->getModel()->getNodeByReference('subscription.' . $uuid);
+        if ($node === null) {
+            return null;
+        }
+        return [
+            'source_type' => (string)$node->source_type,
+            'url' => (string)$node->url,
+            'links' => (string)$node->links,
+            'outbounds' => (string)$node->outbounds,
+        ];
     }
 
     public function nodesAction($uuid)
@@ -148,7 +161,10 @@ class SubscriptionController extends ApiMutableModelControllerBase
             return ['result' => 'failed', 'message' => 'Subscription not found'];
         }
         try {
-            $kind = (string)($source['source_type'] ?? 'url');
+            $kind = trim((string)($source['source_type'] ?? ''));
+            if ($kind === '') {
+                $kind = 'url';
+            }
             if ($kind === 'url') {
                 $body = self::download(trim((string)($source['url'] ?? '')));
             } elseif ($kind === 'links') {
