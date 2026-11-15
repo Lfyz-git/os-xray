@@ -17,7 +17,7 @@
                 <tbody id="xraySourceRows"></tbody>
             </table>
 
-            <div id="xraySourceEditor" class="panel panel-default" style="display:none;max-width:850px;">
+            <div id="xraySourceEditor" class="panel panel-default" style="display:none;width:100%;max-width:none;">
                 <div class="panel-heading"><strong id="xraySourceEditorTitle">Add subscription</strong></div>
                 <div class="panel-body">
                     <div class="form-group">
@@ -37,7 +37,8 @@
                     </div>
                     <div class="form-group" id="xraySourceLinksGroup" style="display:none;">
                         <label for="xraySourceLinks">VLESS links (one per line, or base64 subscription content)</label>
-                        <textarea class="form-control" id="xraySourceLinks" rows="9" spellcheck="false"
+                        <textarea class="form-control" id="xraySourceLinks" rows="16" spellcheck="false"
+                                  style="width:100%;min-height:360px;resize:vertical;font-family:monospace;"
                                   placeholder="vless://...#Kalamar-US"></textarea>
                     </div>
                     <button type="button" class="btn btn-primary" id="xraySourceSave">Save and refresh</button>
