@@ -34,5 +34,15 @@ namespace {
         isset($summaries[0]['settings']) || isset($summaries[0]['id'])) {
         throw new \RuntimeException('Node list leaks private config');
     }
+    if (!xray_subscription_has_selected_node($nodes, 'Kalamar-US') ||
+        xray_subscription_has_selected_node($nodes, 'Missing-node')) {
+        throw new \\RuntimeException('Selected-node protection failed');
+    }
+    $now = 1794762000;
+    if (!xray_subscription_due(360, $now - 360 * 60, $now) ||
+        xray_subscription_due(360, $now - 359 * 60, $now) ||
+        xray_subscription_due(0, 0, $now)) {
+        throw new \\RuntimeException('Refresh schedule failed');
+    }
     echo "subscription smoke: OK\n";
 }
