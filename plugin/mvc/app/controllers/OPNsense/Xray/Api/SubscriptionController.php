@@ -124,7 +124,7 @@ class SubscriptionController extends ApiMutableModelControllerBase
         }
         // OPNsense's WebGui php.ini deliberately disables allow_url_fopen.
         // Use the system HTTPS fetch utility instead of fopen(https://...).
-        // No disabled TLS verification, shell interpolation, or redirects.
+        // Keep TLS verification enabled and disable automatic 302 redirects.
         $temp = tempnam(sys_get_temp_dir(), 'xray-sub-');
         if ($temp === false || !chmod($temp, 0600)) {
             throw new \RuntimeException('Cannot create private subscription download file');
