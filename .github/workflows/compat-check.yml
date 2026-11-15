@@ -17,11 +17,22 @@ jobs:
         run: |
           sh -n install.sh
           find plugin -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          python3 - <<'PY'
+          import pathlib
+          import xml.etree.ElementTree as ET
+          for path in pathlib.Path('plugin/mvc/app/models/OPNsense/Xray').glob('*.xml'):
+              ET.parse(path)
+          PY
           node - <<'NODE'
           const fs = require('fs');
-          const src = fs.readFileSync('plugin/mvc/app/views/OPNsense/Xray/partials/outbounds_editor.volt', 'utf8')
-            .replace(/^<script>\s*|\s*<\/script>\s*$/g, '');
-          new Function(src);
+          for (const name of ['subscriptions_ui', 'tab_subscriptions', 'tab_advanced']) {
+            const path = 'plugin/mvc/app/views/OPNsense/Xray/partials/' + name + '.volt';
+            const src = fs.readFileSync(path, 'utf8');
+            if (name === 'subscriptions_ui')
+              new Function(src.replace(/^<script>\s*|\s*<\/script>\s*$/g, ''));
+          }
           NODE
-      - name: Candidate generation
-        run: python3 tests/behavioral_config_test.py && python3 tests/behavioral_candidate_test.py
+      - name: Candidate generation and subscription import
+        run: |
+          python3 tests/behavioral_config_test.py
+          php tests/subscriptions_smoke_test.php
