@@ -22,7 +22,7 @@ class SubscriptionController extends ApiMutableModelControllerBase
     public function searchItemAction()
     {
         // Never expose subscription URLs, share links or proxy credentials in grid responses.
-        return $this->searchBase('subscription', ['enabled', 'name', 'source_type', 'node_count', 'updated_at']);
+        return $this->searchBase('subscription', ['enabled', 'name', 'source_type', 'node_count', 'refresh_interval', 'updated_at', 'last_error']);
     }
 
     public function getItemAction($uuid = null)
@@ -126,6 +126,8 @@ class SubscriptionController extends ApiMutableModelControllerBase
                 'outbounds' => $json,
                 'node_count' => (string)count($outbounds),
                 'updated_at' => gmdate('Y-m-d H:i:s') . ' UTC',
+                'last_checked' => (string)time(),
+                'last_error' => '',
             ]);
             $this->save();
             return ['result' => 'ok', 'count' => count($outbounds)];
