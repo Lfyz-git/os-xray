@@ -21,6 +21,7 @@
 </style>
 
 {{ partial('OPNsense/Xray/partials/scripts') }}
+{{ partial('OPNsense/Xray/partials/outbounds_editor') }}
 
 <ul class="nav nav-tabs" data-tabs="tabs" id="maintabs">
     <li class="active"><a data-toggle="tab" href="#instances">{{ lang._('Instances') }}</a></li>
