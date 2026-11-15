@@ -122,32 +122,52 @@ class SubscriptionController extends ApiMutableModelControllerBase
                 throw new \InvalidArgumentException('Subscription host resolves to a private or reserved address');
             }
         }
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 10,
-                'follow_location' => 0,
-                'ignore_errors' => true,
-                'header' => "Accept: text/plain, application/json\r\nUser-Agent: os-xray/PR2\r\n",
-            ],
-            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
-        ]);
-        $stream = @fopen($url, 'rb', false, $context);
-        if ($stream === false) {
-            throw new \RuntimeException('Cannot download subscription (HTTPS connection failed)');
+        // OPNsense's WebGui php.ini deliberately disables allow_url_fopen.
+        // Use the system HTTPS fetch utility instead of fopen(https://...).
+        // No disabled TLS verification, shell interpolation, or redirects.
+        $temp = tempnam(sys_get_temp_dir(), 'xray-sub-');
+        if ($temp === false || !chmod($temp, 0600)) {
+            throw new \RuntimeException('Cannot create private subscription download file');
         }
+
         try {
-            $meta = stream_get_meta_data($stream);
-            $status = $meta['wrapper_data'][0] ?? '';
-            if (!preg_match('/^HTTP\/\S+\s+200(?:\s|$)/', $status)) {
-                throw new \RuntimeException('Subscription server did not return HTTP 200');
+            $command = '/usr/bin/fetch -A -d -q -T 12 -o '
+                . escapeshellarg($temp) . ' ' . escapeshellarg($url) . ' 2>&1';
+            $output = [];
+            $status = 1;
+            exec($command, $output, $status);
+            if ($status !== 0) {
+                // fetch diagnostic messages may contain the tokenized URL;
+                // classify the failure without returning or logging raw output.
+                $details = strtolower(implode("\n", $output));
+                if (str_contains($details, 'certificate') || str_contains($details, 'ssl')
+                    || str_contains($details, 'tls')) {
+                    $reason = 'TLS certificate or handshake error';
+                } elseif (str_contains($details, 'refused')) {
+                    $reason = 'connection refused';
+                } elseif (str_contains($details, 'timed out') || str_contains($details, 'timeout')) {
+                    $reason = 'connection timeout';
+                } elseif (str_contains($details, 'resolve') || str_contains($details, 'no address')
+                    || str_contains($details, 'name lookup')) {
+                    $reason = 'DNS lookup failed';
+                } elseif (preg_match('/\b(30[0-9]|40[0-9]|50[0-9])\b/', $details, $matches)) {
+                    $reason = 'HTTP ' . $matches[1];
+                } else {
+                    $reason = 'network or HTTP error';
+                }
+                throw new \RuntimeException('Cannot download subscription (' . $reason . ')');
             }
-            $body = stream_get_contents($stream, 1048577);
-            if ($body === false || strlen($body) > 1048576) {
-                throw new \RuntimeException('Subscription response is larger than 1 MiB');
+            $size = filesize($temp);
+            if ($size === false || $size > 1048576) {
+                throw new \RuntimeException('Subscription response exceeds 1 MiB');
+            }
+            $body = file_get_contents($temp);
+            if ($body === false || $body === '') {
+                throw new \RuntimeException('Subscription download is empty or unreadable');
             }
             return $body;
         } finally {
-            fclose($stream);
+            @unlink($temp);
         }
     }
 
