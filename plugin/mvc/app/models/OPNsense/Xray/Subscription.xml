@@ -24,6 +24,17 @@
             <links type="TextField">
                 <Required>N</Required>
             </links>
+            <refresh_interval type="IntegerField">
+                <Default>360</Default>
+                <MinimumValue>0</MinimumValue>
+                <MaximumValue>10080</MaximumValue>
+            </refresh_interval>
+            <last_checked type="TextField">
+                <Required>N</Required>
+            </last_checked>
+            <last_error type="TextField">
+                <Required>N</Required>
+            </last_error>
             <outbounds type="TextField">
                 <Required>N</Required>
             </outbounds>
