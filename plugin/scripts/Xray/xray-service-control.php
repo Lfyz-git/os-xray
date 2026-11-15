@@ -82,6 +82,8 @@ function xray_parse_instance($inst, bool $globalEnabled): array
     return [
         'enabled'         => $globalEnabled && (string)($inst->enabled ?? '1') === '1',
         'name'            => (string)($inst->name             ?? 'default'),
+        'subscription_uuid' => (string)($inst->subscription_uuid ?? ''),
+        'selected_outbound' => (string)($inst->selected_outbound ?? ''),
         'outbound_config' => (string)($inst->outbound_config  ?? ''),
         'socks5_listen'   => (string)($inst->socks5_listen    ?? '127.0.0.1') ?: '127.0.0.1',
         'socks5_port'     => (int)(string)($inst->socks5_port ?? 10808) ?: 10808,
@@ -109,6 +111,16 @@ function xray_get_all_instances(): array
         return [];
     }
 
+    // Subscription sources are global; each runtime instance may choose one.
+    $sources = [];
+    $configuredSources = $cfg->OPNsense->xray->subscriptions->subscription ?? [];
+    foreach ($configuredSources as $src) {
+        $sid = (string)$src['uuid'];
+        if (xray_valid_instance_uuid($sid) && (string)($src->enabled ?? '1') === '1') {
+            $sources[$sid] = (string)($src->outbounds ?? '');
+        }
+    }
+
     $result = [];
     foreach ($ins->instance as $inst) {
         // SimpleXML: атрибуты читаются через $element['attr']
@@ -119,6 +131,11 @@ function xray_get_all_instances(): array
             continue;
         }
         $c = xray_parse_instance($inst, $globalEnabled);
+        if ($c['subscription_uuid'] !== '') {
+            // No fallback to a stale manual outbound when the selected source
+            // has been disabled, removed or has not yet been refreshed.
+            $c['outbound_config'] = $sources[$c['subscription_uuid']] ?? '';
+        }
         $c['inst_uuid'] = $inst_uuid;
         $result[$inst_uuid] = $c;
     }
