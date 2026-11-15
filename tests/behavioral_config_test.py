@@ -28,7 +28,22 @@ foreach ($cases as $outbound) {
           'bypass_networks'=>' 192.0.2.0/24, ,2001:db8::/32 ', 'loglevel'=>'debug'];
     $result[] = ['config'=>xray_build_config($c), 'yaml'=>xray_build_t2s_config($c)];
 }
-$result[] = ['defaults'=>xray_build_config(['outbound_config'=>'{"protocol":"freedom"}'])];
+$multi = [
+    ['tag'=>'proxy', 'protocol'=>'vless', 'settings'=>['address'=>'a.example','port'=>443]],
+    ['tag'=>'backup', 'protocol'=>'vless', 'settings'=>['address'=>'b.example','port'=>443]],
+];
+$result[] = [
+    'defaults'=>xray_build_config(['outbound_config'=>'{"protocol":"freedom"}']),
+    'multiple'=>xray_build_config(['outbound_config'=>json_encode($multi)]),
+];
+foreach ([
+    [['tag'=>'proxy','protocol'=>'freedom'], ['tag'=>'proxy','protocol'=>'freedom']],
+    [['tag'=>'direct','protocol'=>'freedom']],
+    [['protocol'=>'freedom'], ['tag'=>'backup','protocol'=>'freedom']],
+] as $bad) {
+    try { xray_build_config(['outbound_config'=>json_encode($bad)]); exit(91); }
+    catch (InvalidArgumentException $e) { /* expected */ }
+}
 foreach (['', '{', 'null', '[]', '{}', '{"tag":"missing-protocol"}'] as $raw) {
     try { xray_build_config(['outbound_config'=>$raw]); exit(90); }
     catch (InvalidArgumentException $e) { /* expected */ }
@@ -57,6 +72,9 @@ assert defaults["inbounds"][0]["listen"] == "127.0.0.1"
 assert defaults["log"] == {"loglevel": "warning"}
 assert defaults["routing"]["domainStrategy"] == "IPIfNonMatch"
 assert len(defaults["routing"]["rules"][0]["ip"]) == 3
-print("behavioral legacy config builders: OK (flat, vnext, generic outbound, defaults, malformed JSON)")
+multiple = results[-1]["multiple"]
+assert [item["tag"] for item in multiple["outbounds"]] == ["proxy", "backup", "direct"]
+assert multiple["outbounds"][1]["settings"]["address"] == "b.example"
+print("config builder: OK (single/multiple outbounds, routing, duplicate tag rejection)")
 # Frozen pre-refactor defaults, including exact bypass list and outbound order.
 assert hashlib.sha256(json.dumps(defaults, sort_keys=True, separators=(",", ":")).encode()).hexdigest() == "22a2ac483e88948ead7c4ba3107d1387074af0c83957ee33cb32d0259112173b"
