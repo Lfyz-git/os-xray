@@ -72,6 +72,7 @@ function xray_cron(): array
     // A bare positional tuple is ignored by system_cron_configure().
     return [
         ['autocron' => ['/usr/local/sbin/configctl -d xray watchdog', '*']],
+        ['autocron' => ['/usr/local/sbin/configctl -d xray subscriptions', '*/15']],
     ];
 }
 
