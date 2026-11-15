@@ -281,10 +281,28 @@
         // ── Import VLESS (inside DialogInstance) ──────────────────
         function applyImportToDialog(data) {
             var $dlg = $('#DialogInstance');
-            if (data.name) {
+            var $field = $dlg.find('[id="instance.outbound_config"]');
+            var raw = $.trim($field.val() || '');
+            var current = raw ? JSON.parse(raw) : [];
+            var list = Array.isArray(current) ? current : [current];
+            var imported = JSON.parse(data.outbound_config || 'null');
+            if (!imported || typeof imported !== 'object' || Array.isArray(imported)) {
+                throw new Error('Invalid imported outbound');
+            }
+            // Share links use tag "proxy"; avoid collisions when importing more than one.
+            var baseTag = imported.tag || 'proxy';
+            var tag = baseTag;
+            var number = 2;
+            var used = list.map(function (item) { return item && item.tag; });
+            while (tag === 'direct' || used.indexOf(tag) !== -1) {
+                tag = baseTag + '-' + number++;
+            }
+            imported.tag = tag;
+            list.push(imported);
+            if (data.name && list.length === 1) {
                 $dlg.find('[id="instance.name"]').val(data.name);
             }
-            $dlg.find('[id="instance.outbound_config"]').val(data.outbound_config || '');
+            $field.val(JSON.stringify(list, null, 2)).trigger('change');
         }
 
         // Inject Import panel + Validate button into DialogInstance on first open
@@ -365,7 +383,12 @@
                             .text("{{ lang._('Parse error:') }} " + (data.message || 'unknown'));
                         return;
                     }
-                    applyImportToDialog(data);
+                    try {
+                        applyImportToDialog(data);
+                    } catch (e) {
+                        $res.removeClass('text-success').addClass('text-danger').text(e.message);
+                        return;
+                    }
                     $res.removeClass('text-danger').addClass('text-success')
                         .text("{{ lang._('Imported! Fields filled from link.') }}");
                     // Collapse import panel after success
