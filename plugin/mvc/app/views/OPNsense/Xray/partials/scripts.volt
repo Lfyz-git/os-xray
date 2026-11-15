@@ -414,6 +414,12 @@
             $('#' + preId).text("{{ lang._('Loading...') }}");
             $.post(apiEndpointWithUuid, null, function (data) {
                 var text = (data && data.log) || "{{ lang._('Log is empty.') }}";
+                // Some log lines arrive with HTML entities (e.g. &gt;&gt;).
+                // Decode those textual delimiters, then use .text() so log
+                // content can never be interpreted as HTML.
+                if (preId === 'logCoreContent') {
+                    text = String(text).replace(/&gt;/g, '>').replace(/&lt;/g, '<');
+                }
                 $('#' + preId).text(text);
                 $('#' + btnId).prop('disabled', false);
                 var pre = document.getElementById(preId);
