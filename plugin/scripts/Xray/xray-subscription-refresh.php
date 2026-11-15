@@ -12,11 +12,6 @@ require_once '/usr/local/opnsense/mvc/app/controllers/OPNsense/Xray/Api/ImportCo
 use OPNsense\Core\Config;
 use OPNsense\Xray\Api\ImportController;
 
-function xray_subscription_due(int $interval, int $lastChecked, int $now): bool
-{
-    return $interval > 0 && ($lastChecked <= 0 || $now - $lastChecked >= $interval * 60);
-}
-
 function xray_subscription_validate_candidate(array $outbounds, $instance): void
 {
     $selected = (string)($instance->selected_outbound ?? '');
