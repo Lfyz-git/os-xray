@@ -108,6 +108,12 @@
         <help>Use sniffed HTTP/TLS host names for routing without changing the original destination. Recommended.</help>
     </field>
     <field>
+        <id>instance.routing_domain_strategy</id>
+        <label>Routing Domain Strategy</label>
+        <type>dropdown</type>
+        <help>AsIs avoids automatic IP lookup for domain rules. IPIfNonMatch resolves a domain on a second pass if required; IPOnDemand resolves when evaluating IP rules. Default: IPIfNonMatch.</help>
+    </field>
+    <field>
         <id>instance.routing_rules</id>
         <label>Custom Routing Rules</label>
         <type>text</type>
