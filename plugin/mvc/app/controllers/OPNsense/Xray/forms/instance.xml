@@ -23,10 +23,40 @@
         <help>Select the source of proxy nodes. Create and refresh sources on the Subscriptions tab.</help>
     </field>
     <field>
+        <id>instance.route_mode</id>
+        <label>Traffic Selection</label>
+        <type>dropdown</type>
+        <help>Manual uses one selected node. LeastLoad distributes new connections among observed healthy nodes in the pool.</help>
+    </field>
+    <field>
         <id>instance.selected_outbound</id>
-        <label>Active Node</label>
+        <label>Manual Active Node</label>
         <type>text</type>
-        <help>The selected node is used for unmatched traffic. Balancer selection will be added separately.</help>
+        <help>Used only in Manual mode. The first node is used when no node is selected.</help>
+    </field>
+    <field>
+        <id>instance.balancer_nodes</id>
+        <label>LeastLoad Pool</label>
+        <type>text</type>
+        <help>Choose at least two nodes from the subscription. The pool is used only in LeastLoad mode.</help>
+    </field>
+    <field>
+        <id>instance.balancer_fallback</id>
+        <label>Fallback Node</label>
+        <type>text</type>
+        <help>Required in LeastLoad mode; used when observed pool nodes are unavailable.</help>
+    </field>
+    <field>
+        <id>instance.balancer_expected</id>
+        <label>Selected Nodes (expected)</label>
+        <type>text</type>
+        <help>Number of best healthy pool nodes eligible for load distribution. Default: 2.</help>
+    </field>
+    <field>
+        <id>instance.balancer_tolerance</id>
+        <label>Failure Tolerance</label>
+        <type>text</type>
+        <help>Maximum acceptable fraction of failed probes, 0 to 1. Default: 0.2 (20%).</help>
     </field>
 
     <field>
