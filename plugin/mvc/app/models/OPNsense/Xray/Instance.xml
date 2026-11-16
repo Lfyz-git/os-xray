@@ -73,6 +73,16 @@
                 <MaximumValue>9000</MaximumValue>
                 <Required>Y</Required>
             </mtu>
+            <sniffing_enabled type="BooleanField">
+                <Default>0</Default>
+            </sniffing_enabled>
+            <sniffing_route_only type="BooleanField">
+                <Default>1</Default>
+            </sniffing_route_only>
+            <routing_rules type="TextField">
+                <Required>N</Required>
+                <Default>[]</Default>
+            </routing_rules>
             <!-- v1.0.4: bypass_networks — CIDR-список сетей для direct routing -->
             <bypass_networks type="TextField">
                 <Default>10.0.0.0/8,172.16.0.0/12,192.168.0.0/16</Default>
