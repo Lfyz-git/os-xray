@@ -19,6 +19,86 @@ function xray_build_routing(string $bypassRaw): array
     ];
 }
 
+/**
+ * Canonical GUI reference: source UUID + "::" + original node tag.
+ * Original tags can repeat across subscription sources.
+ */
+function xray_balancer_parse_ref(string $reference, string $primarySource): array
+{
+    if (preg_match('/^([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})::(.+)$/isD', $reference, $m)) {
+        return [strtolower($m[1]), $m[2]];
+    }
+    // Existing single-source selections stay valid after upgrading PR2.
+    return [$primarySource, $reference];
+}
+
+/**
+ * Resolve the selected pool and fallback against all enabled subscriptions.
+ * Only selected outbounds enter the generated Xray config; unrelated nodes
+ * and credentials from other sources never need to be included.
+ */
+function xray_prepare_balancer_sources(array $c, array $sources): array
+{
+    if (($c['route_mode'] ?? 'manual') !== 'leastLoad') {
+        return $c;
+    }
+    $pool = json_decode((string)($c['balancer_nodes'] ?? '[]'), true);
+    if (!is_array($pool) || !array_is_list($pool) || count($pool) < 2) {
+        throw new InvalidArgumentException('LeastLoad requires at least two pool nodes');
+    }
+    $fallback = (string)($c['balancer_fallback'] ?? '');
+    if ($fallback === '') {
+        throw new InvalidArgumentException('LeastLoad fallback is required');
+    }
+    $primary = (string)($c['subscription_uuid'] ?? '');
+    $newPool = [];
+    $newFallback = '';
+    $outbounds = [];
+    $seen = [];
+
+    foreach (array_merge($pool, [$fallback]) as $index => $reference) {
+        if (!is_string($reference) || $reference === '') {
+            throw new InvalidArgumentException('Invalid LeastLoad node reference');
+        }
+        [$sourceId, $originalTag] = xray_balancer_parse_ref($reference, $primary);
+        if ($sourceId === '' || $originalTag === '' || $originalTag === 'direct' ||
+            !array_key_exists($sourceId, $sources)) {
+            throw new InvalidArgumentException('Selected subscription or node is unavailable');
+        }
+        $list = json_decode((string)$sources[$sourceId], true);
+        if (!is_array($list) || !array_is_list($list)) {
+            throw new InvalidArgumentException('Selected subscription has no valid node cache');
+        }
+        $matches = array_values(array_filter($list, static function ($node) use ($originalTag) {
+            return is_array($node) && ($node['tag'] ?? null) === $originalTag;
+        }));
+        if (count($matches) !== 1) {
+            throw new InvalidArgumentException('Selected node is missing or ambiguous in its subscription');
+        }
+        $key = $sourceId . "::" . $originalTag;
+        // Hash first: Xray's selector uses a prefix, so raw display tags are
+        // unsafe when names in different feeds collide or prefix one another.
+        $tag = 'node-' . hash('sha256', $key);
+        if (!isset($seen[$key])) {
+            $outbound = $matches[0];
+            $outbound['tag'] = $tag;
+            $outbounds[] = $outbound;
+            $seen[$key] = true;
+        } elseif ($index < count($pool)) {
+            throw new InvalidArgumentException('Duplicate node in LeastLoad pool');
+        }
+        if ($index < count($pool)) {
+            $newPool[] = $tag;
+        } else {
+            $newFallback = $tag;
+        }
+    }
+    $c['outbound_config'] = json_encode($outbounds, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $c['balancer_nodes'] = json_encode($newPool, JSON_THROW_ON_ERROR);
+    $c['balancer_fallback'] = $newFallback;
+    return $c;
+}
+
 function xray_build_config(array $c): array
 {
     $raw = trim($c['outbound_config'] ?? '');
