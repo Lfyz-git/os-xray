@@ -137,9 +137,19 @@ function xray_get_all_instances(): array
         }
         $c = xray_parse_instance($inst, $globalEnabled);
         if ($c['subscription_uuid'] !== '') {
-            // No fallback to a stale manual outbound when the selected source
-            // has been disabled, removed or has not yet been refreshed.
+            // Manual mode remains attached to its explicitly selected source.
             $c['outbound_config'] = $sources[$c['subscription_uuid']] ?? '';
+        }
+        if ($c['route_mode'] === 'leastLoad') {
+            try {
+                // Source-qualified pool/fallback references allow nodes from
+                // independent subscriptions without a new instance per source.
+                $c = xray_prepare_balancer_sources($c, $sources);
+            } catch (Throwable $e) {
+                // Invalid selections must fail candidate preflight, not break
+                // unrelated instance status/Stop or silently skip a missing node.
+                $c['balancer_error'] = $e->getMessage();
+            }
         }
         $c['inst_uuid'] = $inst_uuid;
         $result[$inst_uuid] = $c;
