@@ -148,6 +148,8 @@ class SubscriptionController extends ApiMutableModelControllerBase
             if ($node === null) {
                 throw new \RuntimeException('Subscription no longer exists');
             }
+            $instances = Config::getInstance()->object()->OPNsense->xray->instances->instance ?? [];
+            xray_subscription_assert_selected_nodes($outbounds, $instances, (string)$uuid);
             $node->setNodes([
                 'outbounds' => $json,
                 'node_count' => (string)count($outbounds),
