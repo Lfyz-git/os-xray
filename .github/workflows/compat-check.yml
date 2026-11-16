@@ -16,6 +16,8 @@ jobs:
       - name: Syntax
         run: |
           sh -n install.sh
+          sh -n upgrade.sh
+          sh -n plugin/etc/rc.syshook.d/start/50-xray
           find plugin -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           python3 - <<'PY'
           import pathlib
@@ -32,6 +34,13 @@ jobs:
               new Function(src.replace(/^<script>\s*|\s*<\/script>\s*$/g, ''));
           }
           NODE
+      - name: Existing lifecycle safety regressions
+        run: |
+          python3 tests/behavioral_stop_test.py
+          python3 tests/behavioral_actions_test.py
+          python3 tests/behavioral_candidate_test.py
+          python3 tests/behavioral_process_identity_test.py
+          python3 tests/behavioral_lock_test.py
       - name: Candidate generation and subscription import
         run: |
           python3 tests/behavioral_config_test.py
