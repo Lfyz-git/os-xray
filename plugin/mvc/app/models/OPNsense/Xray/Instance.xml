@@ -22,6 +22,29 @@
             <selected_outbound type="TextField">
                 <Required>N</Required>
             </selected_outbound>
+            <route_mode type="OptionField">
+                <Default>manual</Default>
+                <OptionValues>
+                    <manual>Manual node</manual>
+                    <leastLoad>LeastLoad balancer</leastLoad>
+                </OptionValues>
+            </route_mode>
+            <balancer_nodes type="TextField">
+                <Required>N</Required>
+                <Default>[]</Default>
+            </balancer_nodes>
+            <balancer_fallback type="TextField">
+                <Required>N</Required>
+            </balancer_fallback>
+            <balancer_expected type="IntegerField">
+                <Default>2</Default>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>16</MaximumValue>
+            </balancer_expected>
+            <balancer_tolerance type="TextField">
+                <Default>0.2</Default>
+                <Required>N</Required>
+            </balancer_tolerance>
             <outbound_config type="TextField">
                 <Required>N</Required>
                 <Default></Default>
