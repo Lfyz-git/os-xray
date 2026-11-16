@@ -11,25 +11,37 @@ class InstanceController extends ApiMutableModelControllerBase
 
     public function searchItemAction()
     {
-        $response = $this->searchBase('instance', ['enabled', 'name', 'outbound_config']);
-        if (!empty($response['rows'])) {
-            foreach ($response['rows'] as &$row) {
-                $ob       = json_decode($row['outbound_config'] ?? '', true);
-                $settings = is_array($ob) ? ($ob['settings'] ?? []) : [];
-
-                // Xray 26.x simplified VLESS settings first, legacy vnext fallback.
-                if (isset($settings['address'])) {
-                    $row['server_address'] = (string)$settings['address'];
-                    $row['server_port']    = isset($settings['port']) ? (string)$settings['port'] : '';
-                } else {
-                    $vnext = $settings['vnext'][0] ?? [];
-                    $row['server_address'] = (string)($vnext['address'] ?? '');
-                    $row['server_port']    = isset($vnext['port']) ? (string)$vnext['port'] : '';
-                }
-                unset($row['outbound_config']);
-            }
-            unset($row);
+        $response = $this->searchBase(
+            'instance', ['enabled', 'name', 'outbound_config', 'subscription_uuid', 'selected_outbound']
+        );
+        $sources = [];
+        $cfg = \OPNsense\Core\Config::getInstance()->object();
+        foreach ($cfg->OPNsense->xray->subscriptions->subscription ?? [] as $src) {
+            $sources[(string)$src['uuid']] = json_decode((string)($src->outbounds ?? ''), true) ?: [];
         }
+        foreach ($response['rows'] ?? [] as &$row) {
+            $sourceId = (string)($row['subscription_uuid'] ?? '');
+            $outbounds = $sourceId !== '' ?
+                ($sources[$sourceId] ?? []) :
+                json_decode((string)($row['outbound_config'] ?? ''), true);
+            if (!is_array($outbounds)) $outbounds = [];
+            if (!array_is_list($outbounds)) $outbounds = [$outbounds];
+
+            $active = (string)($row['selected_outbound'] ?? '');
+            $ob = $outbounds[0] ?? [];
+            foreach ($outbounds as $candidate) {
+                if ($active !== '' && ($candidate['tag'] ?? '') === $active) {
+                    $ob = $candidate;
+                    break;
+                }
+            }
+            $settings = $ob['settings'] ?? [];
+            $vnext = $settings['vnext'][0] ?? [];
+            $row['server_address'] = (string)($settings['address'] ?? $vnext['address'] ?? '');
+            $row['server_port'] = (string)($settings['port'] ?? $vnext['port'] ?? '');
+            unset($row['outbound_config']);
+        }
+        unset($row);
         return $response;
     }
 

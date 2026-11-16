@@ -23,7 +23,7 @@ class ImportController extends ApiControllerBase
             return ['status' => 'error', 'message' => 'Link too long'];
         }
 
-        $data = $this->parseVless($link);
+        $data = self::parseVless($link);
         if (isset($data['error'])) {
             return ['status' => 'error', 'message' => $data['error']];
         }
@@ -77,7 +77,7 @@ class ImportController extends ApiControllerBase
         return $result;
     }
 
-    private function parseVless(string $link): array
+    public static function parseVless(string $link): array
     {
         // Убираем лишние пробелы и кавычки
         $link = trim($link, " \t\n\r\0\x0B\"'");
@@ -92,7 +92,7 @@ class ImportController extends ApiControllerBase
         // Отделяем #name в конце
         $name = '';
         if (($hashPos = strrpos($rest, '#')) !== false) {
-            $name = htmlspecialchars(urldecode(substr($rest, $hashPos + 1)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $name = urldecode(substr($rest, $hashPos + 1));
             $rest = substr($rest, 0, $hashPos);
         }
 
@@ -193,7 +193,7 @@ class ImportController extends ApiControllerBase
                 'encryption' => $encryption,
                 'flow'       => $flow,
             ],
-            'streamSettings' => $this->buildStreamSettings($type, $security, $params),
+            'streamSettings' => self::buildStreamSettings($type, $security, $params),
         ];
 
         return [
@@ -205,7 +205,7 @@ class ImportController extends ApiControllerBase
     /**
      * Собирает streamSettings для xray-core конфига на основе transport type и security.
      */
-    private function buildStreamSettings(string $type, string $security, array $params): array
+    private static function buildStreamSettings(string $type, string $security, array $params): array
     {
         $ss = [
             'network'  => $type,

@@ -82,6 +82,17 @@ function xray_parse_instance($inst, bool $globalEnabled): array
     return [
         'enabled'         => $globalEnabled && (string)($inst->enabled ?? '1') === '1',
         'name'            => (string)($inst->name             ?? 'default'),
+        'subscription_uuid' => (string)($inst->subscription_uuid ?? ''),
+        'selected_outbound' => (string)($inst->selected_outbound ?? ''),
+        'route_mode' => (string)($inst->route_mode ?? 'manual'),
+        'balancer_nodes' => (string)($inst->balancer_nodes ?? '[]'),
+        'balancer_fallback' => (string)($inst->balancer_fallback ?? ''),
+        'balancer_expected' => (string)($inst->balancer_expected ?? '2'),
+        'balancer_tolerance' => (string)($inst->balancer_tolerance ?? '0.2'),
+        'sniffing_enabled' => (string)($inst->sniffing_enabled ?? '0'),
+        'sniffing_route_only' => (string)($inst->sniffing_route_only ?? '1'),
+        'routing_rules' => (string)($inst->routing_rules ?? '[]'),
+        'routing_domain_strategy' => (string)($inst->routing_domain_strategy ?? 'IPIfNonMatch'),
         'outbound_config' => (string)($inst->outbound_config  ?? ''),
         'socks5_listen'   => (string)($inst->socks5_listen    ?? '127.0.0.1') ?: '127.0.0.1',
         'socks5_port'     => (int)(string)($inst->socks5_port ?? 10808) ?: 10808,
@@ -109,6 +120,16 @@ function xray_get_all_instances(): array
         return [];
     }
 
+    // Subscription sources are global; each runtime instance may choose one.
+    $sources = [];
+    $configuredSources = $cfg->OPNsense->xray->subscriptions->subscription ?? [];
+    foreach ($configuredSources as $src) {
+        $sid = (string)$src['uuid'];
+        if (xray_valid_instance_uuid($sid) && (string)($src->enabled ?? '1') === '1') {
+            $sources[$sid] = (string)($src->outbounds ?? '');
+        }
+    }
+
     $result = [];
     foreach ($ins->instance as $inst) {
         // SimpleXML: атрибуты читаются через $element['attr']
@@ -119,6 +140,21 @@ function xray_get_all_instances(): array
             continue;
         }
         $c = xray_parse_instance($inst, $globalEnabled);
+        if ($c['subscription_uuid'] !== '') {
+            // Manual mode remains attached to its explicitly selected source.
+            $c['outbound_config'] = $sources[$c['subscription_uuid']] ?? '';
+        }
+        if ($c['route_mode'] === 'leastLoad') {
+            try {
+                // Source-qualified pool/fallback references allow nodes from
+                // independent subscriptions without a new instance per source.
+                $c = xray_prepare_balancer_sources($c, $sources);
+            } catch (Throwable $e) {
+                // Invalid selections must fail candidate preflight, not break
+                // unrelated instance status/Stop or silently skip a missing node.
+                $c['balancer_error'] = $e->getMessage();
+            }
+        }
         $c['inst_uuid'] = $inst_uuid;
         $result[$inst_uuid] = $c;
     }
@@ -505,6 +541,44 @@ function do_status_all(): void
     echo json_encode($result) . "\n";
 }
 
+/**
+ * Read the most recently applied Xray configuration, not the subscription
+ * cache or a fresh candidate. Includes credentials; return only via the
+ * authenticated service API. Never write this JSON to logs.
+ */
+function do_applied_config(string $inst_uuid): void
+{
+    if ($inst_uuid === '') {
+        echo json_encode(['result' => 'failed', 'message' => 'Instance UUID required']) . "\n";
+        return;
+    }
+    $path = xray_conf_path($inst_uuid);
+    if (!is_file($path) || !is_readable($path)) {
+        echo json_encode(['result' => 'failed', 'message' => 'No applied Xray configuration found']) . "\n";
+        return;
+    }
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        echo json_encode(['result' => 'failed', 'message' => 'Cannot read applied Xray configuration']) . "\n";
+        return;
+    }
+    $config = json_decode($contents, true);
+    if (!is_array($config) || json_last_error() !== JSON_ERROR_NONE) {
+        echo json_encode(['result' => 'failed', 'message' => 'Applied configuration is not valid JSON']) . "\n";
+        return;
+    }
+    $outbounds = $config['outbounds'] ?? [];
+    $defaultTag = is_array($outbounds) && isset($outbounds[0]) && is_array($outbounds[0])
+        ? (string)($outbounds[0]['tag'] ?? '(untagged)')
+        : '';
+    echo json_encode([
+        'result' => 'ok',
+        'config' => $config,
+        'xray_core' => proc_is_running(xray_pid_path($inst_uuid)) ? 'running' : 'stopped',
+        'default_outbound' => $defaultTag,
+    ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+}
+
 // A bounded, secret-free summary shared by the boot syshook and plugin hook.
 // Replace the previous event; never persist raw validator/controller output.
 function xray_boot_log(string $state): void
@@ -567,6 +641,10 @@ switch ($action) {
 
     case 'statusall':
         do_status_all();
+        break;
+
+    case 'config':
+        do_applied_config($inst_uuid);
         break;
 
     case 'validate':

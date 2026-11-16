@@ -17,11 +17,46 @@
         <hint>e.g. default, work, streaming</hint>
     </field>
     <field>
-        <id>instance.outbound_config</id>
-        <label>Outbound Config (JSON)</label>
-        <type>textbox</type>
-        <help>xray-core outbound object. Use "Import VLESS link" above to auto-fill, or paste/write the outbound JSON directly. The backend wraps it with SOCKS5 inbound and routing on save.</help>
-        <hint>{"tag":"proxy","protocol":"vless","settings":{...},"streamSettings":{...}}</hint>
+        <id>instance.subscription_uuid</id>
+        <label>Manual Subscription</label>
+        <type>text</type>
+        <help>Source for Manual mode. LeastLoad can use nodes from any enabled subscription.</help>
+    </field>
+    <field>
+        <id>instance.route_mode</id>
+        <label>Traffic Selection</label>
+        <type>dropdown</type>
+        <help>Manual uses one selected node. LeastLoad distributes new connections among observed healthy nodes in the pool.</help>
+    </field>
+    <field>
+        <id>instance.selected_outbound</id>
+        <label>Manual Active Node</label>
+        <type>text</type>
+        <help>Used only in Manual mode. The first node is used when no node is selected.</help>
+    </field>
+    <field>
+        <id>instance.balancer_nodes</id>
+        <label>LeastLoad Pool</label>
+        <type>text</type>
+        <help>Choose at least two nodes from any enabled subscription. Each item shows its source and node name.</help>
+    </field>
+    <field>
+        <id>instance.balancer_fallback</id>
+        <label>Fallback Node</label>
+        <type>text</type>
+        <help>Required in LeastLoad mode; may come from any enabled subscription.</help>
+    </field>
+    <field>
+        <id>instance.balancer_expected</id>
+        <label>Selected Nodes (expected)</label>
+        <type>text</type>
+        <help>Number of best healthy pool nodes eligible for load distribution. Default: 2.</help>
+    </field>
+    <field>
+        <id>instance.balancer_tolerance</id>
+        <label>Failure Tolerance</label>
+        <type>text</type>
+        <help>Maximum acceptable fraction of failed probes, 0 to 1. Default: 0.2 (20%).</help>
     </field>
 
     <field>
@@ -59,6 +94,30 @@
     <field>
         <type>header</type>
         <label>Routing</label>
+    </field>
+    <field>
+        <id>instance.sniffing_enabled</id>
+        <label>Enable Sniffing</label>
+        <type>checkbox</type>
+        <help>Detect HTTP, TLS and BitTorrent traffic at the SOCKS inbound for routing rules. Off by default.</help>
+    </field>
+    <field>
+        <id>instance.sniffing_route_only</id>
+        <label>Sniffing: Route Only</label>
+        <type>checkbox</type>
+        <help>Use sniffed HTTP/TLS host names for routing without changing the original destination. Recommended.</help>
+    </field>
+    <field>
+        <id>instance.routing_domain_strategy</id>
+        <label>Routing Domain Strategy</label>
+        <type>dropdown</type>
+        <help>AsIs avoids automatic IP lookup for domain rules. IPIfNonMatch resolves a domain on a second pass if required; IPOnDemand resolves when evaluating IP rules. Default: IPIfNonMatch.</help>
+    </field>
+    <field>
+        <id>instance.routing_rules</id>
+        <label>Custom Routing Rules</label>
+        <type>text</type>
+        <help>Ordered rules for protocol, domain, IP or port. The first match wins. Private-network direct bypass stays first; the active proxy or balancer stays last. BitTorrent detection requires Sniffing. Routing to Direct bypasses the VPN exit and may expose your public IP.</help>
     </field>
     <field>
         <id>instance.bypass_networks</id>

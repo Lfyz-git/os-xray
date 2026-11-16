@@ -70,6 +70,29 @@ class ServiceController extends ApiMutableServiceControllerBase
     }
 
     /**
+     * POST /api/xray/service/config/{uuid}
+     * Read the last applied on-disk Xray configuration for the Advanced tab.
+     * Contains outbound credentials, so the response requires the service ACL
+     * and must not be exposed as a public GET URL or written to logs.
+     */
+    public function configAction($uuid = '')
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'failed', 'message' => 'POST required'];
+        }
+        if (!preg_match('/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iD', (string)$uuid)) {
+            return ['result' => 'failed', 'message' => 'Invalid instance UUID'];
+        }
+        $backend = new Backend();
+        $response = $backend->configdRun('xray config ' . $uuid);
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded) || !isset($decoded['result'])) {
+            return ['result' => 'failed', 'message' => 'Unable to read applied Xray configuration'];
+        }
+        return $decoded;
+    }
+
+    /**
      * GET /api/xray/service/statusAll — статус всех инстансов.
      */
     public function statusAllAction()

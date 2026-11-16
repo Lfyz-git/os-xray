@@ -28,6 +28,9 @@ function xray_prepare_candidate(array $c): ?array
 {
     $tmp = false;
     try {
+        if (!empty($c['balancer_error'])) {
+            throw new InvalidArgumentException($c['balancer_error']);
+        }
         $json = xray_normalize_transport(json_encode(xray_build_config($c),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         $tmp = tempnam(sys_get_temp_dir(), 'xray-candidate-');

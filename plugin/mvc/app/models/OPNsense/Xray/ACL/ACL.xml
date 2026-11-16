@@ -14,6 +14,13 @@
             <pattern>api/xray/instance/*</pattern>
         </patterns>
     </acl_xray_instance>
+    <acl_xray_subscription>
+        <n>Xray: Subscription management</n>
+        <description>Manage subscription URLs, node caches and outbound credentials</description>
+        <patterns>
+            <pattern>api/xray/subscription/*</pattern>
+        </patterns>
+    </acl_xray_subscription>
     <acl_xray_service>
         <n>Xray: Service control</n>
         <description>Allow access to Xray service control (start, stop, reconfigure, status)</description>
