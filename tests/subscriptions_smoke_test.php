@@ -142,6 +142,7 @@ namespace {
         'selected_outbound' => 'Kalamar-CZ',
         'sniffing_enabled' => '1',
         'sniffing_route_only' => '1',
+        'routing_domain_strategy' => 'AsIs',
         'routing_rules' => json_encode([
             ['kind'=>'protocol', 'match'=>'bittorrent', 'target'=>'direct'],
             ['kind'=>'domain', 'match'=>'domain:example.com', 'target'=>'block'],
@@ -151,6 +152,7 @@ namespace {
     $manualRules = $manualRouting['routing']['rules'];
     if (count($manualRules) !== 4 ||
         ($manualRules[0]['outboundTag'] ?? '') !== 'direct' ||
+        $manualRouting['routing']['domainStrategy'] !== 'AsIs' ||
         ($manualRules[1]['protocol'] ?? []) !== ['bittorrent'] ||
         ($manualRules[1]['outboundTag'] ?? '') !== 'direct' ||
         ($manualRules[2]['outboundTag'] ?? '') !== 'block' ||
@@ -183,6 +185,7 @@ namespace {
         ['sniffing_enabled'=>'0', 'routing_rules'=>'[{"kind":"protocol","match":"bittorrent","target":"direct"}]'],
         ['sniffing_enabled'=>'1', 'routing_rules'=>'[{"kind":"port","match":"70000","target":"direct"}]'],
         ['sniffing_enabled'=>'1', 'routing_rules'=>'[{"kind":"domain","match":"","target":"direct"}]'],
+        ['routing_domain_strategy'=>'Invalid'],
     ] as $invalidRouting) {
         try {
             xray_build_config(array_merge(['outbound_config'=>json_encode($nodes)], $invalidRouting));
