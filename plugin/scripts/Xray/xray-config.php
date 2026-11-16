@@ -196,6 +196,12 @@ function xray_build_config(array $c): array
                 break;
             }
         }
+        // A subscription is a source catalog, not an Xray runtime pool.
+        // Emit only observed pool nodes and the explicit fallback.
+        $outbounds = array_values(array_filter($outbounds, static function ($outbound) use ($chosen, $fallback) {
+            $tag = $outbound['tag'] ?? '';
+            return isset($chosen[$tag]) || $tag === $fallback;
+        }));
         $routing['balancers'] = [[
             'tag' => 'proxy-balance',
             'selector' => array_keys($chosen),
@@ -245,6 +251,9 @@ function xray_build_config(array $c): array
                 array_unshift($outbounds, $preferred);
             }
         }
+        // Manual mode must launch exactly one proxy, not the entire source.
+        // The separate 'direct' outbound is added below for private bypass.
+        $outbounds = [$outbounds[0]];
     }
 
     $outbounds[] = ['tag' => 'direct', 'protocol' => 'freedom'];
