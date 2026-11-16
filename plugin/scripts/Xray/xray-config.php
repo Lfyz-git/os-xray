@@ -210,6 +210,11 @@ function xray_build_config(array $c): array
         throw new InvalidArgumentException('Unknown Xray routing mode');
     }
     $routing = xray_build_routing($c['bypass_networks'] ?? '');
+    $domainStrategy = (string)($c['routing_domain_strategy'] ?? 'IPIfNonMatch');
+    if (!in_array($domainStrategy, ['AsIs', 'IPIfNonMatch', 'IPOnDemand'], true)) {
+        throw new InvalidArgumentException('Invalid routing domain strategy');
+    }
+    $routing['domainStrategy'] = $domainStrategy;
     $burst = null;
 
     if ($mode === 'leastLoad') {
