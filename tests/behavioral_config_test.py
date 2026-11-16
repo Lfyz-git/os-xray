@@ -35,6 +35,9 @@ $multi = [
 $result[] = [
     'defaults'=>xray_build_config(['outbound_config'=>'{"protocol":"freedom"}']),
     'multiple'=>xray_build_config(['outbound_config'=>json_encode($multi)]),
+    'selectedBackup'=>xray_build_config([
+        'outbound_config'=>json_encode($multi), 'selected_outbound'=>'backup',
+    ]),
 ];
 foreach ([
     [['tag'=>'proxy','protocol'=>'freedom'], ['tag'=>'proxy','protocol'=>'freedom']],
@@ -73,8 +76,10 @@ assert defaults["log"] == {"loglevel": "warning"}
 assert defaults["routing"]["domainStrategy"] == "IPIfNonMatch"
 assert len(defaults["routing"]["rules"][0]["ip"]) == 3
 multiple = results[-1]["multiple"]
-assert [item["tag"] for item in multiple["outbounds"]] == ["proxy", "backup", "direct"]
-assert multiple["outbounds"][1]["settings"]["address"] == "b.example"
-print("config builder: OK (single/multiple outbounds, routing, duplicate tag rejection)")
+assert [item["tag"] for item in multiple["outbounds"]] == ["proxy", "direct"]
+selected_backup = results[-1]["selectedBackup"]
+assert [item["tag"] for item in selected_backup["outbounds"]] == ["backup", "direct"]
+assert selected_backup["outbounds"][0]["settings"]["address"] == "b.example"
+print("config builder: OK (manual emits one proxy; routing and duplicate tags validated)")
 # Frozen pre-refactor defaults, including exact bypass list and outbound order.
 assert hashlib.sha256(json.dumps(defaults, sort_keys=True, separators=(",", ":")).encode()).hexdigest() == "22a2ac483e88948ead7c4ba3107d1387074af0c83957ee33cb32d0259112173b"
