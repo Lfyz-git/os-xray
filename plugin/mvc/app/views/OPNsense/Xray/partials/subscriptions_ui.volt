@@ -407,8 +407,17 @@ $(function () {
             $field.val(JSON.stringify(rules)).trigger('change');
         }
         function ruleSelect(options, current) {
-            var $select = $('<select class="form-control input-sm">').css({
-                width: '100%', minWidth: '0'
+            // The OPNsense theme gives .form-control select elements an
+            // oversized line-height; combined with input-sm this clips text
+            // along the lower edge. Explicit native-select sizing fixes it.
+            var $select = $('<select class="form-control">').css({
+                width: '100%',
+                minWidth: '0',
+                height: '34px',
+                lineHeight: 'normal',
+                padding: '5px 28px 5px 10px',
+                boxSizing: 'border-box',
+                verticalAlign: 'middle'
             });
             options.forEach(function (item) {
                 $select.append($('<option>').val(item.value).text(item.label));
