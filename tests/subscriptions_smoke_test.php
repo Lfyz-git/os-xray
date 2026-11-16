@@ -24,10 +24,11 @@ namespace {
         'outbound_config' => json_encode($nodes),
         'selected_outbound' => 'Kalamar-CZ',
     ]);
-    if ($config['outbounds'][0]['tag'] !== 'Kalamar-CZ' ||
-        $config['outbounds'][1]['tag'] !== 'Kalamar-US' ||
-        $config['outbounds'][2]['tag'] !== 'direct') {
-        throw new \RuntimeException('Active node selection failed');
+    if (count($config['outbounds']) !== 2 ||
+        $config['outbounds'][0]['tag'] !== 'Kalamar-CZ' ||
+        $config['outbounds'][1]['tag'] !== 'direct' ||
+        isset($config['routing']['balancers'], $config['burstObservatory'])) {
+        throw new \RuntimeException('Manual mode emitted unselected subscription nodes');
     }
     $summaries = xray_subscription_node_summaries($nodes);
     if ($summaries[0]['server'] !== 'us.example' ||
@@ -48,6 +49,9 @@ namespace {
     $poolNodes = array_merge($nodes, [[
         'tag' => 'Kalamar-BY', 'protocol' => 'vless',
         'settings' => ['address' => 'by.example', 'port' => 443],
+    ], [
+        'tag' => 'Unused', 'protocol' => 'vless',
+        'settings' => ['address' => 'unused.example', 'port' => 443],
     ]]);
     $balanced = xray_build_config([
         'outbound_config' => json_encode($poolNodes),
@@ -63,8 +67,10 @@ namespace {
         || ($balanced['routing']['balancers'][0]['fallbackTag'] ?? '') !== 'Kalamar-BY'
         || ($balanced['routing']['balancers'][0]['strategy']['type'] ?? '') !== 'leastLoad'
         || ($balanced['burstObservatory']['pingConfig']['sampling'] ?? 0) !== 10
-        || ($balanced['outbounds'][0]['tag'] ?? '') !== 'Kalamar-BY') {
-        throw new \RuntimeException('LeastLoad config generation failed');
+        || ($balanced['outbounds'][0]['tag'] ?? '') !== 'Kalamar-BY'
+        || count($balanced['outbounds']) !== 4
+        || in_array('Unused', array_column($balanced['outbounds'], 'tag'), true)) {
+        throw new \RuntimeException('LeastLoad config contains an unused source node');
     }
     try {
         xray_build_config([
