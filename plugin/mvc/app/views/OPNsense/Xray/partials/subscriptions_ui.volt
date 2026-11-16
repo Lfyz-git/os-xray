@@ -236,6 +236,8 @@ $(function () {
         showRow('selected_outbound', !balanced);
         ['balancer_nodes', 'balancer_fallback', 'balancer_expected', 'balancer_tolerance']
             .forEach(function (name) { showRow(name, balanced); });
+        showRow('sniffing_route_only',
+            instanceField('sniffing_enabled').prop('checked'));
         // Keep hidden values for subsequent mode changes; do not alter
         // the saved selections just because a row is invisible.
     }
@@ -361,6 +363,149 @@ $(function () {
         });
     }
 
+    // The routing form is a structured editor; only the canonical JSON field
+    // is submitted by OPNsense BaseForm. This avoids accepting unbounded raw
+    // Xray routing objects or exposing the entire runtime config for editing.
+    function installRoutingEditor() {
+        var $field = instanceField('routing_rules');
+        if (!$field.length) return;
+        $field.hide();
+        var $editor = $('#xrayRoutingEditor');
+        if (!$editor.length) {
+            $editor = $('<div id="xrayRoutingEditor">').css({
+                maxWidth: '100%', minWidth: '0'
+            }).insertAfter($field);
+        }
+        $editor.empty();
+        var raw = $field.val() || '[]';
+        var rules;
+        try {
+            rules = JSON.parse(raw);
+            if (!Array.isArray(rules)) throw new Error('Expected an array');
+        } catch (_) {
+            $('<div class="text-danger">').text(
+                'Stored routing rules are invalid JSON. Fix them before adding new rules.'
+            ).appendTo($editor);
+            return;
+        }
+
+        $('<p class="text-muted">').text(
+            'First match wins. Private-network bypass runs first; these rules run ' +
+            'before the default proxy / LeastLoad. Direct uses the local WAN, not a VPN exit.'
+        ).appendTo($editor);
+
+        var $toolbar = $('<div>').css({
+            display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px'
+        }).appendTo($editor);
+        var $add = $('<button type="button" class="btn btn-default btn-sm">')
+            .text('Add rule').appendTo($toolbar);
+        var $addBt = $('<button type="button" class="btn btn-default btn-sm">')
+            .text('BitTorrent → Direct').appendTo($toolbar);
+        var $list = $('<div id="xrayRoutingRuleList">').appendTo($editor);
+
+        function sync() {
+            $field.val(JSON.stringify(rules)).trigger('change');
+        }
+        function ruleSelect(options, current) {
+            var $select = $('<select class="form-control input-sm">').css({
+                width: '100%', minWidth: '0'
+            });
+            options.forEach(function (item) {
+                $select.append($('<option>').val(item.value).text(item.label));
+            });
+            $select.val(current);
+            return $select;
+        }
+        function render() {
+            $list.empty();
+            if (!rules.length) {
+                $('<p class="text-muted">').text('No custom rules.').appendTo($list);
+                return;
+            }
+            rules.forEach(function (rule, index) {
+                var $card = $('<div class="well well-sm">').css({
+                    marginBottom: '6px', minWidth: '0', padding: '8px'
+                }).appendTo($list);
+                var $top = $('<div>').css({
+                    display: 'flex', gap: '6px', marginBottom: '6px'
+                }).appendTo($card);
+                var $kind = ruleSelect([
+                    {value:'protocol',label:'Protocol'},
+                    {value:'domain',label:'Domain'},
+                    {value:'ip',label:'IP/CIDR'},
+                    {value:'port',label:'Port'}
+                ], rule.kind).appendTo($top).css({flex: '1 1 50%'});
+                var $target = ruleSelect([
+                    {value:'proxy',label:'Proxy / LeastLoad'},
+                    {value:'direct',label:'Direct'},
+                    {value:'block',label:'Block'}
+                ], rule.target).appendTo($top).css({flex: '1 1 50%'});
+                var $match = $('<input type="text" class="form-control input-sm">')
+                    .css({width:'100%',minWidth:'0',marginBottom:'6px'})
+                    .val(rule.match || '').appendTo($card);
+                var placeholders = {
+                    protocol: 'bittorrent, tls, http or quic',
+                    domain: 'domain:example.com, geosite:category-ads-all',
+                    ip: '203.0.113.0/24, geoip:private',
+                    port: '443, 8000-9000'
+                };
+                $match.attr('placeholder', placeholders[rule.kind] || '');
+                $kind.on('change', function () {
+                    rule.kind = $(this).val();
+                    $match.attr('placeholder', placeholders[rule.kind] || '');
+                    sync();
+                });
+                $target.on('change', function () {
+                    rule.target = $(this).val();
+                    sync();
+                });
+                $match.on('input change', function () {
+                    rule.match = $(this).val();
+                    sync();
+                });
+
+                var $commands = $('<div>').css({
+                    display:'flex',gap:'6px',justifyContent:'flex-end'
+                }).appendTo($card);
+                function command(text, disabled, callback) {
+                    $('<button type="button" class="btn btn-default btn-xs">')
+                        .text(text).prop('disabled', disabled)
+                        .appendTo($commands).on('click', callback);
+                }
+                command('↑', index === 0, function () {
+                    var value = rules[index - 1];
+                    rules[index - 1] = rules[index];
+                    rules[index] = value;
+                    sync(); render();
+                });
+                command('↓', index === rules.length - 1, function () {
+                    var value = rules[index + 1];
+                    rules[index + 1] = rules[index];
+                    rules[index] = value;
+                    sync(); render();
+                });
+                command('Remove', false, function () {
+                    rules.splice(index, 1); sync(); render();
+                });
+            });
+        }
+        $add.on('click', function () {
+            rules.push({kind:'domain',match:'',target:'proxy'});
+            sync(); render();
+        });
+        $addBt.on('click', function () {
+            if (!rules.some(function (rule) {
+                return rule.kind === 'protocol' &&
+                    rule.match === 'bittorrent' && rule.target === 'direct';
+            })) {
+                rules.push({kind:'protocol',match:'bittorrent',target:'direct'});
+            }
+            instanceField('sniffing_enabled').prop('checked', true).trigger('change');
+            sync(); render();
+        });
+        render();
+    }
+
     $instance.on('shown.bs.modal', function () {
         var src = installSelect('subscription_uuid', 'xrayInstanceSource',
             'Manual JSON (Advanced)');
@@ -372,6 +517,7 @@ $(function () {
             pool: instanceField('balancer_nodes').val() || '[]'
         };
         installPool();
+        installRoutingEditor();
         setVisibleRoutingMode();
         sources(function (rows) {
             src.select.empty().append($('<option>').val('').text('Manual JSON (Advanced)'));
@@ -397,6 +543,10 @@ $(function () {
     });
 
     $instance.on('change', '[id="instance.route_mode"]', setVisibleRoutingMode);
+    $instance.on('change', '[id="instance.sniffing_enabled"]', function () {
+        $instance.find('[id="row_instance.sniffing_route_only"]')
+            .toggle($(this).prop('checked'));
+    });
 
     // Advanced displays exactly the last applied config file, never a newly
     // assembled subscription preview or an unsaved candidate.
