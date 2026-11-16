@@ -45,6 +45,7 @@ function xray_subscription_validate_candidate(array $sources, $instance): void
         'sniffing_enabled' => (string)($instance->sniffing_enabled ?? '0'),
         'sniffing_route_only' => (string)($instance->sniffing_route_only ?? '1'),
         'routing_rules' => (string)($instance->routing_rules ?? '[]'),
+        'routing_domain_strategy' => (string)($instance->routing_domain_strategy ?? 'IPIfNonMatch'),
         'socks5_listen' => (string)($instance->socks5_listen ?? '127.0.0.1'),
         'socks5_port' => (int)($instance->socks5_port ?? 10808),
         'bypass_networks' => (string)($instance->bypass_networks ?? ''),
