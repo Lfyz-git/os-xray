@@ -278,10 +278,22 @@ $(function () {
                 var chosen = readPool(initial.pool);
                 (data.nodes || []).forEach(function (item, idx) {
                     var id = 'xrayPoolItem' + idx;
-                    var $label = $('<label class="checkbox" style="display:block;margin:3px 0;">');
+                    // Do not use Bootstrap's .checkbox class on a <label>:
+                    // it absolutely positions the input outside the pool box.
+                    var $label = $('<label class="xray-pool-choice">').css({
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '5px 10px',
+                        margin: '0',
+                        width: '100%',
+                        cursor: 'pointer',
+                        fontWeight: 'normal'
+                    });
                     var $check = $('<input type="checkbox">').attr('id', id)
-                        .val(item.tag).prop('checked', chosen.indexOf(item.tag) !== -1);
-                    $label.append($check).append($('<span>').text(' ' + item.tag)).appendTo(pool.pool);
+                        .val(item.tag).prop('checked', chosen.indexOf(item.tag) !== -1)
+                        .css({position: 'static', margin: '0', flex: '0 0 auto'});
+                    $label.append($check).append($('<span>').text(item.tag)).appendTo(pool.pool);
                 });
                 var missing = chosen.filter(function (name) { return tags.indexOf(name) === -1; });
                 if (missing.length) {
