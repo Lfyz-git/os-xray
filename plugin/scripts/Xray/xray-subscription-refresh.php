@@ -12,20 +12,32 @@ require_once '/usr/local/opnsense/mvc/app/controllers/OPNsense/Xray/Api/ImportCo
 use OPNsense\Core\Config;
 use OPNsense\Xray\Api\ImportController;
 
-function xray_subscription_validate_candidate(array $outbounds, $instance): void
+function xray_subscription_instance_uses_source($instance, string $sourceId): bool
 {
-    $selected = (string)($instance->selected_outbound ?? '');
-    // The manually pinned node is relevant only in manual routing mode.
-    if ((string)($instance->route_mode ?? 'manual') !== 'leastLoad'
-        && !xray_subscription_has_selected_node($outbounds, $selected)) {
-        throw new RuntimeException('Selected node is missing; keeping the previous subscription');
+    $primary = strtolower((string)($instance->subscription_uuid ?? ''));
+    if ((string)($instance->route_mode ?? 'manual') !== 'leastLoad') {
+        return $primary === $sourceId;
     }
-    // The live service preflights Apply as well, but validate the downloaded
-    // configuration before committing it to the source cache.
-    $candidate = xray_build_config([
-        'outbound_config' => json_encode($outbounds, JSON_THROW_ON_ERROR),
-        'selected_outbound' => $selected,
-        'route_mode' => (string)($instance->route_mode ?? 'manual'),
+    $refs = json_decode((string)($instance->balancer_nodes ?? '[]'), true);
+    if (!is_array($refs)) $refs = [];
+    $refs[] = (string)($instance->balancer_fallback ?? '');
+    foreach ($refs as $ref) {
+        if (!is_string($ref) || $ref === '') continue;
+        [$id, $name] = xray_balancer_parse_ref($ref, $primary);
+        if ($id === $sourceId) return true;
+    }
+    return false;
+}
+
+function xray_subscription_validate_candidate(array $sources, $instance): void
+{
+    $primary = strtolower((string)($instance->subscription_uuid ?? ''));
+    $mode = (string)($instance->route_mode ?? 'manual');
+    $candidateSettings = [
+        'outbound_config' => $sources[$primary] ?? '',
+        'subscription_uuid' => $primary,
+        'selected_outbound' => (string)($instance->selected_outbound ?? ''),
+        'route_mode' => $mode,
         'balancer_nodes' => (string)($instance->balancer_nodes ?? '[]'),
         'balancer_fallback' => (string)($instance->balancer_fallback ?? ''),
         'balancer_expected' => (string)($instance->balancer_expected ?? '2'),
@@ -34,7 +46,18 @@ function xray_subscription_validate_candidate(array $outbounds, $instance): void
         'socks5_port' => (int)($instance->socks5_port ?? 10808),
         'bypass_networks' => (string)($instance->bypass_networks ?? ''),
         'loglevel' => (string)($instance->loglevel ?? 'warning'),
-    ]);
+    ];
+    if ($mode === 'leastLoad') {
+        $candidateSettings = xray_prepare_balancer_sources($candidateSettings, $sources);
+    } else {
+        $nodes = json_decode((string)($sources[$primary] ?? ''), true);
+        if (!is_array($nodes) || !xray_subscription_has_selected_node(
+            $nodes, $candidateSettings['selected_outbound']
+        )) {
+            throw new RuntimeException('Selected manual node is missing; previous subscription retained');
+        }
+    }
+    $candidate = xray_build_config($candidateSettings);
     $bin = '/usr/local/bin/xray-core';
     if (!is_executable($bin)) {
         throw new RuntimeException('Xray binary is unavailable');
@@ -74,6 +97,11 @@ try {
     $xml = $config->object();
     $sources = $xml->OPNsense->xray->subscriptions->subscription ?? [];
     $instances = $xml->OPNsense->xray->instances->instance ?? [];
+    $availableSources = [];
+    foreach ($sources as $source) {
+        if ((string)($source->enabled ?? '1') !== '1') continue;
+        $availableSources[strtolower((string)$source['uuid'])] = (string)($source->outbounds ?? '');
+    }
     $now = time();
 
     foreach ($sources as $source) {
@@ -97,9 +125,11 @@ try {
             $json = json_encode($list, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
             $old = (string)($source->outbounds ?? '');
             if ($json !== $old) {
+                $prospective = $availableSources;
+                $prospective[$id] = $json;
                 foreach ($instances as $instance) {
-                    if ((string)($instance->subscription_uuid ?? '') === $id) {
-                        xray_subscription_validate_candidate($list, $instance);
+                    if (xray_subscription_instance_uses_source($instance, $id)) {
+                        xray_subscription_validate_candidate($prospective, $instance);
                         if ((string)($instance->enabled ?? '1') === '1') {
                             $reload = true;
                         }
@@ -107,6 +137,7 @@ try {
                 }
                 $source->outbounds = $json;
                 $source->node_count = (string)count($list);
+                $availableSources[$id] = $json;
             }
             $source->updated_at = gmdate('Y-m-d H:i:s', $now) . ' UTC';
             $source->last_error = '';
