@@ -135,5 +135,60 @@ namespace {
         throw new \RuntimeException('Missing remote node was accepted');
     } catch (\InvalidArgumentException $e) { /* expected */ }
 
+    // Sniffing exposes a detected BitTorrent protocol to ordered routing.
+    // The private direct rule is protected, then custom rules, then LeastLoad.
+    $manualRouting = xray_build_config([
+        'outbound_config' => json_encode($nodes),
+        'selected_outbound' => 'Kalamar-CZ',
+        'sniffing_enabled' => '1',
+        'sniffing_route_only' => '1',
+        'routing_rules' => json_encode([
+            ['kind'=>'protocol', 'match'=>'bittorrent', 'target'=>'direct'],
+            ['kind'=>'domain', 'match'=>'domain:example.com', 'target'=>'block'],
+            ['kind'=>'port', 'match'=>'443,8000-8001', 'target'=>'proxy'],
+        ]),
+    ]);
+    $manualRules = $manualRouting['routing']['rules'];
+    if (count($manualRules) !== 4 ||
+        ($manualRules[0]['outboundTag'] ?? '') !== 'direct' ||
+        ($manualRules[1]['protocol'] ?? []) !== ['bittorrent'] ||
+        ($manualRules[1]['outboundTag'] ?? '') !== 'direct' ||
+        ($manualRules[2]['outboundTag'] ?? '') !== 'block' ||
+        ($manualRules[3]['outboundTag'] ?? '') !== 'Kalamar-CZ' ||
+        ($manualRouting['inbounds'][0]['sniffing']['routeOnly'] ?? false) !== true ||
+        array_column($manualRouting['outbounds'], 'tag') !== ['Kalamar-CZ','direct','block']) {
+        throw new \RuntimeException('Manual custom routing or sniffing failed');
+    }
+    $balancedRouting = xray_build_config([
+        'outbound_config' => json_encode($poolNodes),
+        'route_mode' => 'leastLoad',
+        'balancer_nodes' => json_encode(['Kalamar-US', 'Kalamar-CZ']),
+        'balancer_fallback' => 'Kalamar-BY',
+        'sniffing_enabled' => '1',
+        'routing_rules' => json_encode([
+            ['kind'=>'protocol', 'match'=>'bittorrent', 'target'=>'direct'],
+            ['kind'=>'domain', 'match'=>'domain:example.com', 'target'=>'proxy'],
+        ]),
+    ]);
+    $balancedRules = $balancedRouting['routing']['rules'];
+    if (count($balancedRules) !== 4 ||
+        ($balancedRules[1]['outboundTag'] ?? '') !== 'direct' ||
+        ($balancedRules[2]['balancerTag'] ?? '') !== 'proxy-balance' ||
+        ($balancedRules[3]['balancerTag'] ?? '') !== 'proxy-balance' ||
+        isset($balancedRules[0]['balancerTag']) ||
+        count($balancedRouting['outbounds']) !== 4) {
+        throw new \RuntimeException('LeastLoad custom routing order failed');
+    }
+    foreach ([
+        ['sniffing_enabled'=>'0', 'routing_rules'=>'[{"kind":"protocol","match":"bittorrent","target":"direct"}]'],
+        ['sniffing_enabled'=>'1', 'routing_rules'=>'[{"kind":"port","match":"70000","target":"direct"}]'],
+        ['sniffing_enabled'=>'1', 'routing_rules'=>'[{"kind":"domain","match":"","target":"direct"}]'],
+    ] as $invalidRouting) {
+        try {
+            xray_build_config(array_merge(['outbound_config'=>json_encode($nodes)], $invalidRouting));
+            throw new \RuntimeException('Invalid routing rule was accepted');
+        } catch (\InvalidArgumentException $e) { /* expected */ }
+    }
+
     echo "subscription smoke: OK\n";
 }
