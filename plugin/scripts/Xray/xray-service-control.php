@@ -92,6 +92,7 @@ function xray_parse_instance($inst, bool $globalEnabled): array
         'sniffing_enabled' => (string)($inst->sniffing_enabled ?? '0'),
         'sniffing_route_only' => (string)($inst->sniffing_route_only ?? '1'),
         'routing_rules' => (string)($inst->routing_rules ?? '[]'),
+        'routing_domain_strategy' => (string)($inst->routing_domain_strategy ?? 'IPIfNonMatch'),
         'outbound_config' => (string)($inst->outbound_config  ?? ''),
         'socks5_listen'   => (string)($inst->socks5_listen    ?? '127.0.0.1') ?: '127.0.0.1',
         'socks5_port'     => (int)(string)($inst->socks5_port ?? 10808) ?: 10808,
