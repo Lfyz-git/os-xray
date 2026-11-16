@@ -50,7 +50,20 @@ function xray_prepare_balancer_sources(array $c, array $sources): array
     if ($fallback === '') {
         throw new InvalidArgumentException('LeastLoad fallback is required');
     }
-    $primary = (string)($c['subscription_uuid'] ?? '');
+    $primary = strtolower((string)($c['subscription_uuid'] ?? ''));
+    // Leave already-deployed single-source LeastLoad settings untouched until
+    // the user explicitly saves source-qualified selections in the GUI.
+    $qualified = false;
+    foreach (array_merge($pool, [$fallback]) as $reference) {
+        if (is_string($reference) &&
+            preg_match('/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}::/i', $reference)) {
+            $qualified = true;
+            break;
+        }
+    }
+    if (!$qualified) {
+        return $c;
+    }
     $newPool = [];
     $newFallback = '';
     $outbounds = [];
@@ -78,7 +91,8 @@ function xray_prepare_balancer_sources(array $c, array $sources): array
         $key = $sourceId . "::" . $originalTag;
         // Hash first: Xray's selector uses a prefix, so raw display tags are
         // unsafe when names in different feeds collide or prefix one another.
-        $tag = 'node-' . hash('sha256', $key);
+        $display = trim(substr(preg_replace('/[^A-Za-z0-9_.-]+/', '_', $originalTag), 0, 36), '_');
+        $tag = 'node-' . substr(hash('sha256', $key), 0, 20) . '-' . ($display ?: 'proxy');
         if (!isset($seen[$key])) {
             $outbound = $matches[0];
             $outbound['tag'] = $tag;
