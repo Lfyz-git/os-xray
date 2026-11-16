@@ -214,3 +214,25 @@ function xray_subscription_due(int $interval, int $lastChecked, int $now): bool
 {
     return $interval > 0 && ($lastChecked <= 0 || $now - $lastChecked >= $interval * 60);
 }
+
+/**
+ * Display the stored UTC refresh timestamp in OPNsense's configured timezone.
+ * Only the grid display is converted; persisted timestamps remain in UTC.
+ */
+function xray_subscription_display_time(string $updatedAt, string $timezoneName): string
+{
+    if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC$/D', $updatedAt)) {
+        return $updatedAt;
+    }
+    try {
+        $timezone = new \DateTimeZone($timezoneName !== '' ? $timezoneName : 'Etc/UTC');
+    } catch (\Throwable $e) {
+        $timezone = new \DateTimeZone('Etc/UTC');
+    }
+    try {
+        $instant = new \DateTimeImmutable($updatedAt);
+        return $instant->setTimezone($timezone)->format('Y-m-d H:i:s T');
+    } catch (\Throwable $e) {
+        return $updatedAt;
+    }
+}
