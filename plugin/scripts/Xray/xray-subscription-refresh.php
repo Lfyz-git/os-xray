@@ -15,7 +15,9 @@ use OPNsense\Xray\Api\ImportController;
 function xray_subscription_validate_candidate(array $outbounds, $instance): void
 {
     $selected = (string)($instance->selected_outbound ?? '');
-    if (!xray_subscription_has_selected_node($outbounds, $selected)) {
+    // The manually pinned node is relevant only in manual routing mode.
+    if ((string)($instance->route_mode ?? 'manual') !== 'leastLoad'
+        && !xray_subscription_has_selected_node($outbounds, $selected)) {
         throw new RuntimeException('Selected node is missing; keeping the previous subscription');
     }
     // The live service preflights Apply as well, but validate the downloaded
@@ -23,6 +25,11 @@ function xray_subscription_validate_candidate(array $outbounds, $instance): void
     $candidate = xray_build_config([
         'outbound_config' => json_encode($outbounds, JSON_THROW_ON_ERROR),
         'selected_outbound' => $selected,
+        'route_mode' => (string)($instance->route_mode ?? 'manual'),
+        'balancer_nodes' => (string)($instance->balancer_nodes ?? '[]'),
+        'balancer_fallback' => (string)($instance->balancer_fallback ?? ''),
+        'balancer_expected' => (string)($instance->balancer_expected ?? '2'),
+        'balancer_tolerance' => (string)($instance->balancer_tolerance ?? '0.2'),
         'socks5_listen' => (string)($instance->socks5_listen ?? '127.0.0.1'),
         'socks5_port' => (int)($instance->socks5_port ?? 10808),
         'bypass_networks' => (string)($instance->bypass_networks ?? ''),
