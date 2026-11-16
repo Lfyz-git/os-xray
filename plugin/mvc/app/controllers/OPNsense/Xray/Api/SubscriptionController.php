@@ -23,7 +23,19 @@ class SubscriptionController extends ApiMutableModelControllerBase
     public function searchItemAction()
     {
         // Never expose subscription URLs, share links or proxy credentials in grid responses.
-        return $this->searchBase('subscription', ['enabled', 'name', 'source_type', 'node_count', 'refresh_interval', 'updated_at', 'last_error']);
+        $result = $this->searchBase('subscription', [
+            'enabled', 'name', 'source_type', 'node_count',
+            'refresh_interval', 'updated_at', 'last_error'
+        ]);
+        // OPNsense stores its configured timezone in system.timezone. Do not
+        // use the browser timezone, which can differ from the firewall's.
+        $timezone = (string)(Config::getInstance()->object()->system->timezone ?? 'Etc/UTC');
+        foreach ($result['rows'] ?? [] as $index => $row) {
+            $result['rows'][$index]['updated_at'] = xray_subscription_display_time(
+                (string)($row['updated_at'] ?? ''), $timezone
+            );
+        }
+        return $result;
     }
 
     public function getItemAction($uuid = null)
