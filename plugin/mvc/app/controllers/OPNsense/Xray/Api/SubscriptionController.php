@@ -6,6 +6,7 @@ use OPNsense\Base\ApiMutableModelControllerBase;
 use OPNsense\Core\Config;
 
 require_once '/usr/local/opnsense/scripts/Xray/xray-subscriptions.php';
+require_once '/usr/local/opnsense/scripts/Xray/xray-config.php';
 
 class SubscriptionController extends ApiMutableModelControllerBase
 {
@@ -61,8 +62,21 @@ class SubscriptionController extends ApiMutableModelControllerBase
         }
         $cfg = Config::getInstance()->object();
         foreach ($cfg->OPNsense->xray->instances->instance ?? [] as $instance) {
-            if ((string)($instance->subscription_uuid ?? '') === $uuid) {
+            $primary = strtolower((string)($instance->subscription_uuid ?? ''));
+            if ($primary === strtolower((string)$uuid)) {
                 return ['result' => 'failed', 'message' => 'This subscription is used by an instance'];
+            }
+            if ((string)($instance->route_mode ?? 'manual') !== 'leastLoad') continue;
+            $pool = json_decode((string)($instance->balancer_nodes ?? '[]'), true);
+            if (!is_array($pool)) $pool = [];
+            $pool[] = (string)($instance->balancer_fallback ?? '');
+            foreach ($pool as $ref) {
+                if (!is_string($ref) || $ref === '') continue;
+                [$sourceId] = xray_balancer_parse_ref($ref, $primary);
+                if ($sourceId === strtolower((string)$uuid)) {
+                    return ['result' => 'failed',
+                        'message' => 'This subscription supplies a LeastLoad node or fallback'];
+                }
             }
         }
         return $this->delBase('subscription', $uuid);
