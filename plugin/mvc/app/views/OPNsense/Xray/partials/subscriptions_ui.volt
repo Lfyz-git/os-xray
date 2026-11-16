@@ -227,13 +227,17 @@ $(function () {
 
     function setVisibleRoutingMode() {
         var balanced = instanceField('route_mode').val() === 'leastLoad';
-        ['subscription_uuid', 'selected_outbound'].forEach(function (name) {
-            instanceField(name).closest('.form-group').toggle(!balanced);
-        });
+        // OPNsense BaseForm renders each field as <tr id="row_instance.FIELD">.
+        // There is no .form-group ancestor here, so hiding one has no effect.
+        function showRow(name, visible) {
+            $instance.find('[id="row_instance.' + name + '"]').toggle(visible);
+        }
+        showRow('subscription_uuid', !balanced);
+        showRow('selected_outbound', !balanced);
         ['balancer_nodes', 'balancer_fallback', 'balancer_expected', 'balancer_tolerance']
-            .forEach(function (name) {
-                instanceField(name).closest('.form-group').toggle(balanced);
-            });
+            .forEach(function (name) { showRow(name, balanced); });
+        // Keep hidden values for subsequent mode changes; do not alter
+        // the saved selections just because a row is invisible.
     }
 
     var nodeLoadEpoch = 0;
