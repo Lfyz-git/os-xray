@@ -18,9 +18,9 @@
     </field>
     <field>
         <id>instance.subscription_uuid</id>
-        <label>Subscription</label>
+        <label>Manual Subscription</label>
         <type>text</type>
-        <help>Select the source of proxy nodes. Create and refresh sources on the Subscriptions tab.</help>
+        <help>Source for Manual mode. LeastLoad can use nodes from any enabled subscription.</help>
     </field>
     <field>
         <id>instance.route_mode</id>
@@ -38,13 +38,13 @@
         <id>instance.balancer_nodes</id>
         <label>LeastLoad Pool</label>
         <type>text</type>
-        <help>Choose at least two nodes from the subscription. The pool is used only in LeastLoad mode.</help>
+        <help>Choose at least two nodes from any enabled subscription. Each item shows its source and node name.</help>
     </field>
     <field>
         <id>instance.balancer_fallback</id>
         <label>Fallback Node</label>
         <type>text</type>
-        <help>Required in LeastLoad mode; used when observed pool nodes are unavailable.</help>
+        <help>Required in LeastLoad mode; may come from any enabled subscription.</help>
     </field>
     <field>
         <id>instance.balancer_expected</id>
