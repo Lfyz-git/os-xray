@@ -27,7 +27,7 @@ namespace {
     if (count($config['outbounds']) !== 2 ||
         $config['outbounds'][0]['tag'] !== 'Kalamar-CZ' ||
         $config['outbounds'][1]['tag'] !== 'direct' ||
-        isset($config['routing']['balancers'], $config['burstObservatory'])) {
+        (isset($config['routing']['balancers']) || isset($config['burstObservatory']))) {
         throw new \RuntimeException('Manual mode emitted unselected subscription nodes');
     }
     $summaries = xray_subscription_node_summaries($nodes);
