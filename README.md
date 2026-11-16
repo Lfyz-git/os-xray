@@ -2,24 +2,29 @@
 
 # os-xray
 
-[![Release](https://img.shields.io/github/v/release/SpyLive/os-xray)](https://github.com/SpyLive/os-xray/releases)
-[![License](https://img.shields.io/github/license/SpyLive/os-xray)](https://github.com/SpyLive/os-xray/blob/develop/LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/SpyLive/os-xray/total)](https://github.com/SpyLive/os-xray/releases)
+[![Release](https://img.shields.io/github/v/release/Lfyz-git/os-xray)](https://github.com/Lfyz-git/os-xray/releases)
+[![License](https://img.shields.io/github/license/Lfyz-git/os-xray)](https://github.com/Lfyz-git/os-xray/blob/develop/LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/Lfyz-git/os-xray/total)](https://github.com/Lfyz-git/os-xray/releases)
 [![OPNsense](https://img.shields.io/badge/OPNsense-26.7.x-blue)](https://opnsense.org)
 [![FreeBSD](https://img.shields.io/badge/FreeBSD-15.1%20amd64-red)](https://freebsd.org)
 
-**Xray-core VPN plugin for OPNsense** — SpyLive compatibility fork v3.1.3
+**Xray-core VPN plugin for OPNsense** — independent Lfyz-git fork v3.2.0
 
-Xray-core + tun2socks — native VPN client for OPNsense with selective routing support. Xray outbound + tun2socks integration for OPNsense policy routing. VLESS share links can be imported into an outbound JSON object, or an outbound object can be edited manually.
+Xray-core + tun2socks — native VPN client for OPNsense, with global subscriptions, selectable outbound nodes, LeastLoad balancing and per-instance routing rules.
 
 ---
 
 ## Features
 
+- **Subscriptions** — HTTPS URL or pasted VLESS links; names preserved; automatic refresh checks every 15 minutes (default refresh interval 360 minutes per source)
+- **Manual mode** — select one active node from a subscription; no unused outbound nodes in the applied configuration
+- **LeastLoad** — choose a pool across subscriptions, with a required fallback and Burst Observatory health checks
+- **Sniffing & Routing** — optional protocol sniffing, ordered protocol/domain/IP/port rules, Direct/Proxy/Block actions and BitTorrent → Direct preset
+- **Advanced** — inspect and copy the last applied Xray JSON (contains credentials); not an editable preview
 - **Multi-instance support** — add, edit and delete multiple VPN instances from a bootgrid table
 - **Per-instance status badges** — each instance row shows xray/tun2socks up/down status, auto-refreshed every 5 seconds
-- **Import VLESS link inside dialog** — collapsible Import panel at the top of the instance edit dialog; Validate Config button in dialog footer; no separate import modal
-- **Import VLESS link** — generates an Xray outbound object (including transport streamSettings such as xhttp, ws, grpc, h2 or kcp where present); the backend wraps it with the local SOCKS inbound and routing
+- **Subscriptions tab** — add or edit global subscription sources, refresh and inspect available nodes without exposing credentials in the node list
+- **VLESS import** — accepts share links (including xhttp, ws, grpc, h2 and kcp transport settings where present) and JSON outbound collections; the backend builds the SOCKS inbound and routing
 - VLESS+REALITY import supports current flat Xray 26.x settings and legacy vnext compatibility; REALITY supports password/publicKey compatibility
 - Tunnel management via GUI: **VPN → Xray**
 - Auto-detects and imports existing xray-core and tun2socks configs during installation
@@ -62,7 +67,7 @@ Firewall Rules (selective routing)
 
 ---
 
-> **Version policy:** upstream GitHub currently marks Xray v26.3.27 as the latest stable release. Xray v26.9.9 is newer but marked prerelease and is bundled by 3x-ui v3.8.5. This firewall fork pins v26.3.27 by default until v26.9.9 completes OPNsense 26.7 integration testing.
+> **Version policy:** the installer pins the tested Xray-core 26.3.27 and tun2socks 2.7.0 binaries. Updating these binaries is separate from releasing the OPNsense plugin.
 
 ## Installation
 
@@ -70,7 +75,7 @@ Firewall Rules (selective routing)
 
 ```sh
 cd /tmp
-git clone https://github.com/SpyLive/os-xray.git
+git clone --branch v3.2.0 https://github.com/Lfyz-git/os-xray.git
 cd os-xray
 sh install.sh
 ```
@@ -78,9 +83,10 @@ sh install.sh
 **Option 2 — via archive**
 
 ```sh
-fetch -o /tmp/os-xray-v5.tar https://github.com/SpyLive/os-xray/archive/refs/heads/develop.tar.gz
-cd /tmp && tar xzf os-xray-v5.tar && cd os-xray-develop
-sh install.sh
+fetch -o /tmp/os-xray-v3.2.0.tar.gz https://github.com/Lfyz-git/os-xray/archive/refs/tags/v3.2.0.tar.gz
+mkdir -p /tmp/os-xray-v3.2.0
+tar -xzf /tmp/os-xray-v3.2.0.tar.gz -C /tmp/os-xray-v3.2.0 --strip-components 1
+cd /tmp/os-xray-v3.2.0 && sh install.sh
 ```
 
 The installer automatically:
@@ -110,8 +116,8 @@ Before updating, make an OPNsense/Proxmox backup and retain an independent conso
 
 ```sh
 cd /root
-git clone --branch main https://github.com/SpyLive/os-xray.git os-xray-main
-cd os-xray-main
+git clone --branch v3.2.0 https://github.com/Lfyz-git/os-xray.git os-xray-v3.2.0
+cd os-xray-v3.2.0
 git rev-parse HEAD              # record and verify intended release commit
 sh upgrade.sh
 configctl xray statusall
@@ -119,7 +125,7 @@ ifconfig proxytun2socks0
 crontab -l | grep 'xray watchdog'
 ```
 
-For future upgrades in the same checkout, use `git fetch origin main && git checkout main && git pull --ff-only`, **review the commit and release notes**, then run `sh upgrade.sh`. Do not run `sh install.sh uninstall` as an upgrade step; it removes plugin files and stops VPN services. Restore from the backup and console if verification fails rather than restarting VPN blindly.
+For future upgrades, check out the next explicit release tag in a separate directory, review its commit and release notes, and run its `sh upgrade.sh`. Do not use `sh install.sh uninstall` as an upgrade step; it removes plugin files and stops VPN services. Restore from the backup and console if verification fails rather than restarting VPN blindly.
 
 **Common TUN:** multiple profiles may be configured, but only one profile using `proxytun2socks0` may be Enabled. A second Enabled profile causes Apply to reject the configuration *before* stopping the active instance. Start cannot override a disabled profile.
 
@@ -127,17 +133,16 @@ For future upgrades in the same checkout, use `git fetch origin main && git chec
 
 ## GUI Setup
 
-Refresh browser (`Ctrl+F5`) → **VPN → Xray**
+Refresh the browser (`Ctrl+F5`) and open **VPN → Xray**.
 
-1. **Instances** tab → click **+** to open the instance dialog
-   - Expand the **Import VLESS link** panel at the top of the dialog → paste link → **Parse & Fill**
-     - The parsed link is converted into the **Outbound Config (JSON)** object using current Xray 26.x syntax.
-   - *(Optional)* edit/paste a valid Xray **outbound object** manually. This is not a full top-level Xray config; the plugin supplies SOCKS inbound, direct outbound and routing.
-   - *(Optional)* **Bypass Networks** field — specify networks that should bypass VPN (default: private networks 10/8, 172.16/12, 192.168/16)
-   - **Validate Config** button (dialog footer) — validate config without restarting the service
-2. **General** tab → check **Enable Xray** (and **Enable Watchdog** if desired)
-3. Press **Apply**
-4. **Test Connection** button — verify the tunnel is working (shows HTTP 200)
+1. **Subscriptions** → Add subscription. Choose an HTTPS URL or paste VLESS links, then **Save and refresh**. Review the node list.
+2. **Instances** → create or edit an instance. In **Traffic Selection**, choose **Manual** (one subscription and active node) or **LeastLoad** (selected pool across sources and explicit fallback).
+3. Optional: turn on **Sniffing** and add ordered **Custom Routing Rules**. The private-network Direct bypass stays first; rules run before the default Manual or LeastLoad route. **BitTorrent → Direct** bypasses the VPN exit.
+4. Set the unique **TUN interface**, SOCKS listener/port, and **Bypass Networks** appropriate to this instance.
+5. **Save**, then **Validate saved configuration**. On the **General** tab, enable Xray (and Watchdog if desired), then press **Apply**.
+6. Confirm traffic from a test client, check the service status, and inspect the exact applied JSON in **Advanced**. The Advanced JSON contains connection credentials.
+
+Pasted-link sources refresh manually. URL subscriptions are checked by cron every 15 minutes, but downloaded only when their configured refresh interval is due (default: six hours). Set an interval of 0 to disable automatic refresh.
 
 ---
 
