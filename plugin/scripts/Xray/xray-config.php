@@ -48,26 +48,113 @@ function xray_build_config(array $c): array
         }
         $tags[$tag] = true;
     }
-    $selected = trim((string)($c['selected_outbound'] ?? ''));
-    if ($selected !== '') {
-        $selectedIndex = null;
-        foreach ($outbounds as $i => $outbound) {
-            if (($outbound['tag'] ?? '') === $selected) {
-                $selectedIndex = $i;
+
+    $mode = trim((string)($c['route_mode'] ?? 'manual')) ?: 'manual';
+    if (!in_array($mode, ['manual', 'leastLoad'], true)) {
+        throw new InvalidArgumentException('Unknown Xray routing mode');
+    }
+    $routing = xray_build_routing($c['bypass_networks'] ?? '');
+    $burst = null;
+
+    if ($mode === 'leastLoad') {
+        // A balancer selector is a *prefix* match in Xray, not an exact match.
+        // Reject ambiguous tags instead of quietly balancing unselected nodes.
+        $pool = json_decode((string)($c['balancer_nodes'] ?? '[]'), true);
+        if (!is_array($pool) || !array_is_list($pool) || count($pool) < 2) {
+            throw new InvalidArgumentException('LeastLoad requires at least two pool nodes');
+        }
+        $chosen = [];
+        foreach ($pool as $tag) {
+            if (!is_string($tag) || $tag === '' || !isset($tags[$tag])
+                || $tag === 'direct' || isset($chosen[$tag])) {
+                throw new InvalidArgumentException('LeastLoad pool contains an invalid or duplicate node');
+            }
+            foreach (array_keys($tags) as $existing) {
+                if ($existing !== $tag && str_starts_with($existing, $tag)) {
+                    throw new InvalidArgumentException(
+                        'Balancer tag prefix matches an unselected node: ' . $tag
+                    );
+                }
+            }
+            $chosen[$tag] = true;
+        }
+        $fallback = trim((string)($c['balancer_fallback'] ?? ''));
+        if ($fallback === '' || $fallback === 'direct' || !isset($tags[$fallback])) {
+            throw new InvalidArgumentException('LeastLoad requires a valid fallback outbound');
+        }
+        $expectedRaw = (string)($c['balancer_expected'] ?? '2');
+        $toleranceRaw = (string)($c['balancer_tolerance'] ?? '0.2');
+        if (!ctype_digit($expectedRaw) || (int)$expectedRaw < 1 || (int)$expectedRaw > 16) {
+            throw new InvalidArgumentException('LeastLoad expected must be from 1 to 16');
+        }
+        if (!is_numeric($toleranceRaw) || !is_finite((float)$toleranceRaw)
+            || (float)$toleranceRaw < 0 || (float)$toleranceRaw > 1) {
+            throw new InvalidArgumentException('LeastLoad tolerance must be between 0 and 1');
+        }
+
+        // The first outbound is the implicit last resort if routing cannot pick
+        // a balancer target. Keep that consistent with the explicit fallback.
+        foreach ($outbounds as $index => $outbound) {
+            if (($outbound['tag'] ?? '') === $fallback) {
+                if ($index > 0) {
+                    array_unshift($outbounds, array_splice($outbounds, $index, 1)[0]);
+                }
                 break;
             }
         }
-        if ($selectedIndex === null) {
-            throw new InvalidArgumentException('Selected outbound is not present in the source');
-        }
-        if ($selectedIndex !== 0) {
-            $preferred = $outbounds[$selectedIndex];
-            array_splice($outbounds, $selectedIndex, 1);
-            array_unshift($outbounds, $preferred);
+        $routing['balancers'] = [[
+            'tag' => 'proxy-balance',
+            'selector' => array_keys($chosen),
+            'fallbackTag' => $fallback,
+            'strategy' => [
+                'type' => 'leastLoad',
+                'settings' => [
+                    'expected' => (int)$expectedRaw,
+                    'tolerance' => (float)$toleranceRaw,
+                ],
+            ],
+        ]];
+        // Direct bypass must remain first; all other SOCKS traffic enters the
+        // balancer through an explicit catch-all rule.
+        $routing['rules'][] = [
+            'type' => 'field',
+            'inboundTag' => ['socks-in'],
+            'network' => 'tcp,udp',
+            'balancerTag' => 'proxy-balance',
+        ];
+        $burst = [
+            'subjectSelector' => array_keys($chosen),
+            'pingConfig' => [
+                'destination' => 'https://www.google.com/generate_204',
+                'interval' => '1m',
+                'sampling' => 10,
+                'timeout' => '5s',
+                'httpMethod' => 'GET',
+            ],
+        ];
+    } else {
+        $selected = trim((string)($c['selected_outbound'] ?? ''));
+        if ($selected !== '') {
+            $selectedIndex = null;
+            foreach ($outbounds as $i => $outbound) {
+                if (($outbound['tag'] ?? '') === $selected) {
+                    $selectedIndex = $i;
+                    break;
+                }
+            }
+            if ($selectedIndex === null) {
+                throw new InvalidArgumentException('Selected outbound is not present in the source');
+            }
+            if ($selectedIndex !== 0) {
+                $preferred = $outbounds[$selectedIndex];
+                array_splice($outbounds, $selectedIndex, 1);
+                array_unshift($outbounds, $preferred);
+            }
         }
     }
+
     $outbounds[] = ['tag' => 'direct', 'protocol' => 'freedom'];
-    return [
+    $result = [
         'log'      => ['loglevel' => $c['loglevel'] ?? 'warning'],
         'inbounds' => [[
             'tag'      => 'socks-in',
@@ -77,8 +164,12 @@ function xray_build_config(array $c): array
             'settings' => ['auth' => 'noauth', 'udp' => true, 'ip' => $c['socks5_listen'] ?? '127.0.0.1'],
         ]],
         'outbounds' => $outbounds,
-        'routing'   => xray_build_routing($c['bypass_networks'] ?? ''),
+        'routing'   => $routing,
     ];
+    if ($burst !== null) {
+        $result['burstObservatory'] = $burst;
+    }
+    return $result;
 }
 
 function yaml_scalar(string $value): string
