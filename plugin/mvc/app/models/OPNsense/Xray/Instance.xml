@@ -79,6 +79,14 @@
             <sniffing_route_only type="BooleanField">
                 <Default>1</Default>
             </sniffing_route_only>
+            <routing_domain_strategy type="OptionField">
+                <Default>IPIfNonMatch</Default>
+                <OptionValues>
+                    <AsIs>AsIs</AsIs>
+                    <IPIfNonMatch>IPIfNonMatch</IPIfNonMatch>
+                    <IPOnDemand>IPOnDemand</IPOnDemand>
+                </OptionValues>
+            </routing_domain_strategy>
             <routing_rules type="TextField">
                 <Required>N</Required>
                 <Default>[]</Default>
