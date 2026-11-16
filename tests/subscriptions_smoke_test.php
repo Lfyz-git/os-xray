@@ -114,6 +114,43 @@ namespace {
     if (str_contains(json_encode($balancedMixed), 'Unused')) {
         throw new \RuntimeException('Unselected source nodes leaked into the config');
     }
+    // Manual refresh preserves the previous cache if any selected node
+    // disappears, in both Manual and cross-subscription LeastLoad.
+    $manualUse = (object)[
+        'subscription_uuid' => $firstSource,
+        'route_mode' => 'manual',
+        'selected_outbound' => 'Common',
+    ];
+    $balanceUse = (object)[
+        'subscription_uuid' => $firstSource,
+        'route_mode' => 'leastLoad',
+        'balancer_nodes' => json_encode([$firstSource . '::Common', $secondSource . '::Common']),
+        'balancer_fallback' => $secondSource . '::Reserve',
+    ];
+    xray_subscription_assert_selected_nodes(
+        json_decode($sources[$firstSource], true), [$manualUse, $balanceUse], $firstSource
+    );
+    xray_subscription_assert_selected_nodes(
+        json_decode($sources[$secondSource], true), [$balanceUse], $secondSource
+    );
+    foreach ([
+        [
+            [['tag' => 'Unused', 'protocol' => 'freedom']],
+            [$manualUse], $firstSource,
+        ],
+        [
+            [['tag' => 'Reserve', 'protocol' => 'freedom']],
+            [$balanceUse], $secondSource,
+        ],
+    ] as [$available, $instances, $sourceId]) {
+        try {
+            xray_subscription_assert_selected_nodes($available, $instances, $sourceId);
+            throw new \RuntimeException('Refresh accepted a removed selected node');
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'Refresh accepted a removed selected node') throw $e;
+        }
+    }
+
     // Existing unqualified selections preserve their runtime configuration.
     $existing = [
         'subscription_uuid' => $firstSource,
