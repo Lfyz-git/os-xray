@@ -76,5 +76,58 @@ namespace {
         throw new \RuntimeException('Missing fallback was accepted');
     } catch (\InvalidArgumentException $e) { /* expected */ }
 
+    // Same visible tag in two subscriptions must produce distinct Xray tags.
+    $firstSource = '11111111-1111-4111-8111-111111111111';
+    $secondSource = '22222222-2222-4222-8222-222222222222';
+    $sources = [
+        $firstSource => json_encode([
+            ['tag' => 'Common', 'protocol' => 'freedom', 'settings' => ['domainStrategy' => 'AsIs']],
+            ['tag' => 'Unused', 'protocol' => 'freedom'],
+        ]),
+        $secondSource => json_encode([
+            ['tag' => 'Common', 'protocol' => 'freedom'],
+            ['tag' => 'Reserve', 'protocol' => 'freedom'],
+        ]),
+    ];
+    $mixed = xray_prepare_balancer_sources([
+        'subscription_uuid' => $firstSource,
+        'route_mode' => 'leastLoad',
+        'balancer_nodes' => json_encode([$firstSource . '::Common', $secondSource . '::Common']),
+        'balancer_fallback' => $secondSource . '::Reserve',
+    ], $sources);
+    $balancedMixed = xray_build_config($mixed);
+    $selector = $balancedMixed['routing']['balancers'][0]['selector'];
+    if (count($selector) !== 2 || $selector[0] === $selector[1]
+        || count($balancedMixed['outbounds']) !== 4
+        || ($balancedMixed['routing']['balancers'][0]['fallbackTag'] ?? '')
+            === $selector[0]
+        || $balancedMixed['routing']['balancers'][0]['fallbackTag']
+            !== $balancedMixed['outbounds'][0]['tag']) {
+        throw new \RuntimeException('Cross-source LeastLoad selection failed');
+    }
+    if (str_contains(json_encode($balancedMixed), 'Unused')) {
+        throw new \RuntimeException('Unselected source nodes leaked into the config');
+    }
+    // Existing unqualified selections preserve their runtime configuration.
+    $existing = [
+        'subscription_uuid' => $firstSource,
+        'outbound_config' => $sources[$firstSource],
+        'route_mode' => 'leastLoad',
+        'balancer_nodes' => '["Common","Unused"]',
+        'balancer_fallback' => 'Common'
+    ];
+    if (xray_prepare_balancer_sources($existing, $sources) !== $existing) {
+        throw new \RuntimeException('Existing single-subscription settings changed');
+    }
+    try {
+        xray_prepare_balancer_sources([
+            'subscription_uuid' => $firstSource,
+            'route_mode' => 'leastLoad',
+            'balancer_nodes' => json_encode([$firstSource . '::Common', $secondSource . '::Gone']),
+            'balancer_fallback' => $secondSource . '::Reserve',
+        ], $sources);
+        throw new \RuntimeException('Missing remote node was accepted');
+    } catch (\InvalidArgumentException $e) { /* expected */ }
+
     echo "subscription smoke: OK\n";
 }
