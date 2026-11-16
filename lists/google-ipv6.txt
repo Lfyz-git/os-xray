@@ -1,6 +1,6 @@
 # Google IPv6 ranges — auto-generated, do not edit by hand
 # Source: gstatic.com/ipranges/goog.json + cloud.json
-# Generated: 2026-10-29T09:32:36Z
+# Generated: 2026-11-16T10:38:12Z
 2a00:1450::/32
 2a03:ace0::/32
 2c0f:fb50::/32
