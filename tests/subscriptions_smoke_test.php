@@ -44,5 +44,37 @@ namespace {
         xray_subscription_due(0, 0, $now)) {
         throw new \RuntimeException('Refresh schedule failed');
     }
+    // Two observed nodes, one reserved fallback, and private bypass first.
+    $poolNodes = array_merge($nodes, [[
+        'tag' => 'Kalamar-BY', 'protocol' => 'vless',
+        'settings' => ['address' => 'by.example', 'port' => 443],
+    ]]);
+    $balanced = xray_build_config([
+        'outbound_config' => json_encode($poolNodes),
+        'route_mode' => 'leastLoad',
+        'balancer_nodes' => json_encode(['Kalamar-US', 'Kalamar-CZ']),
+        'balancer_fallback' => 'Kalamar-BY',
+        'balancer_expected' => 2,
+        'balancer_tolerance' => '0.2',
+    ]);
+    $rules = $balanced['routing']['rules'];
+    if (($rules[0]['outboundTag'] ?? '') !== 'direct'
+        || ($rules[1]['balancerTag'] ?? '') !== 'proxy-balance'
+        || ($balanced['routing']['balancers'][0]['fallbackTag'] ?? '') !== 'Kalamar-BY'
+        || ($balanced['routing']['balancers'][0]['strategy']['type'] ?? '') !== 'leastLoad'
+        || ($balanced['burstObservatory']['pingConfig']['sampling'] ?? 0) !== 10
+        || ($balanced['outbounds'][0]['tag'] ?? '') !== 'Kalamar-BY') {
+        throw new \RuntimeException('LeastLoad config generation failed');
+    }
+    try {
+        xray_build_config([
+            'outbound_config' => json_encode($poolNodes),
+            'route_mode' => 'leastLoad',
+            'balancer_nodes' => json_encode(['Kalamar-US', 'Kalamar-CZ']),
+            'balancer_fallback' => 'missing',
+        ]);
+        throw new \RuntimeException('Missing fallback was accepted');
+    } catch (\InvalidArgumentException $e) { /* expected */ }
+
     echo "subscription smoke: OK\n";
 }
