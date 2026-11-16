@@ -209,6 +209,37 @@ function xray_subscription_has_selected_node(array $outbounds, string $selected)
     return false;
 }
 
+/**
+ * A manual refresh must not replace a working node catalog if it drops a
+ * configured Manual node, LeastLoad pool member or fallback. Automatic
+ * refresh already checks these references before updating its cache.
+ */
+function xray_subscription_assert_selected_nodes(array $nodes, iterable $instances, string $sourceId): void
+{
+    $sourceId = strtolower($sourceId);
+    foreach ($instances as $instance) {
+        $primary = strtolower((string)($instance->subscription_uuid ?? ''));
+        if ((string)($instance->route_mode ?? 'manual') !== 'leastLoad') {
+            if ($primary === $sourceId && !xray_subscription_has_selected_node(
+                $nodes, (string)($instance->selected_outbound ?? '')
+            )) {
+                throw new \RuntimeException('Selected Manual node is missing; previous subscription retained');
+            }
+            continue;
+        }
+        $refs = json_decode((string)($instance->balancer_nodes ?? '[]'), true);
+        if (!is_array($refs)) $refs = [];
+        $refs[] = (string)($instance->balancer_fallback ?? '');
+        foreach ($refs as $ref) {
+            if (!is_string($ref) || $ref === '') continue;
+            [$refSource, $tag] = xray_balancer_parse_ref($ref, $primary);
+            if ($refSource === $sourceId && !xray_subscription_has_selected_node($nodes, $tag)) {
+                throw new \RuntimeException('Selected LeastLoad node is missing; previous subscription retained');
+            }
+        }
+    }
+}
+
 /** Schedule due checks against the last attempt, including failed attempts. */
 function xray_subscription_due(int $interval, int $lastChecked, int $now): bool
 {
