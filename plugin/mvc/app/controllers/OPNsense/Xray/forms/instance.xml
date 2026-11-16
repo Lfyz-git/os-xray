@@ -96,6 +96,24 @@
         <label>Routing</label>
     </field>
     <field>
+        <id>instance.sniffing_enabled</id>
+        <label>Enable Sniffing</label>
+        <type>checkbox</type>
+        <help>Detect HTTP, TLS and BitTorrent traffic at the SOCKS inbound for routing rules. Off by default.</help>
+    </field>
+    <field>
+        <id>instance.sniffing_route_only</id>
+        <label>Sniffing: Route Only</label>
+        <type>checkbox</type>
+        <help>Use sniffed HTTP/TLS host names for routing without changing the original destination. Recommended.</help>
+    </field>
+    <field>
+        <id>instance.routing_rules</id>
+        <label>Custom Routing Rules</label>
+        <type>text</type>
+        <help>Ordered rules for protocol, domain, IP or port. The first match wins. Private-network direct bypass stays first; the active proxy or balancer stays last. BitTorrent detection requires Sniffing. Routing to Direct bypasses the VPN exit and may expose your public IP.</help>
+    </field>
+    <field>
         <id>instance.bypass_networks</id>
         <label>Bypass Networks</label>
         <type>text</type>
