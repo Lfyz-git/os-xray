@@ -2,23 +2,28 @@
 
 # os-xray
 
-[![Release](https://img.shields.io/github/v/release/SpyLive/os-xray)](https://github.com/SpyLive/os-xray/releases)
-[![License](https://img.shields.io/github/license/SpyLive/os-xray)](https://github.com/SpyLive/os-xray/blob/develop/LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/SpyLive/os-xray/total)](https://github.com/SpyLive/os-xray/releases)
+[![Release](https://img.shields.io/github/v/release/Lfyz-git/os-xray)](https://github.com/Lfyz-git/os-xray/releases)
+[![License](https://img.shields.io/github/license/Lfyz-git/os-xray)](https://github.com/Lfyz-git/os-xray/blob/develop/LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/Lfyz-git/os-xray/total)](https://github.com/Lfyz-git/os-xray/releases)
 [![OPNsense](https://img.shields.io/badge/OPNsense-26.7.x-blue)](https://opnsense.org)
 [![FreeBSD](https://img.shields.io/badge/FreeBSD-15.1%20amd64-red)](https://freebsd.org)
 
-**Xray-core VPN plugin for OPNsense** — форк совместимости SpyLive v3.1.3
+**Xray-core VPN plugin for OPNsense** — самостоятельный форк Lfyz-git v3.2.0
 
-Xray-core + tun2socks — нативный VPN-клиент для OPNsense с поддержкой селективной маршрутизации. Интеграция Xray outbound + tun2socks для policy routing в OPNsense. VLESS-ссылку можно импортировать в JSON-объект outbound или отредактировать outbound вручную.
+Xray-core + tun2socks — VPN-клиент для OPNsense с подписками, ручным выбором нод, балансировкой LeastLoad и редактируемыми правилами Routing.
 
 ---
 
 ## Возможности
 
+- **Подписки** — HTTPS URL или вставленные VLESS-ссылки; имена нод сохраняются, планировщик проверяет обновления каждые 15 минут (интервал источника по умолчанию 360 минут)
+- **Manual** — одна выбранная нода без лишних Outbounds в рабочем конфиге
+- **LeastLoad** — пул из нескольких подписок, обязательная резервная нода и Burst Observatory
+- **Sniffing и Routing** — распознавание протоколов, упорядоченные правила по протоколу/домену/IP/порту, действия Direct/Proxy/Block и заготовка BitTorrent → Direct
+- **Advanced** — просмотр и копирование реально применённого JSON Xray (содержит секреты), только для чтения
 - **Мульти-инстанс** — несколько сохранённых профилей VPN с отдельными настройками; одновременно может работать только один профиль на общем TUN-интерфейсе
 - **Per-instance статус** — таблица инстансов показывает статус xray-core и tun2socks для каждого подключения (обновление каждые 5 секунд)
-- **Импорт VLESS-ссылки** прямо в диалоге — преобразует ссылку в Xray outbound object, включая transport streamSettings (xhttp, ws, grpc, h2, kcp, если они присутствуют); backend сам добавляет SOCKS inbound и routing
+- **Вкладка Subscriptions** — добавление, обновление и просмотр нод глобальных источников; в списках не показываются учётные данные нод
 - Импорт VLESS+REALITY использует актуальный flat-синтаксис Xray 26.x и сохраняет чтение legacy vnext; REALITY совместим с password/publicKey
 - Управление туннелем через GUI: **VPN → Xray**
 - При установке автоматически определяет и импортирует существующий конфиг xray-core и tun2socks
@@ -61,7 +66,7 @@ Firewall Rules (селективная маршрутизация)
 
 ---
 
-> **Политика версий:** GitHub upstream сейчас считает Xray v26.3.27 последним стабильным релизом. Xray v26.9.9 новее, но отмечен как prerelease и используется 3x-ui v3.8.5. Этот форк для firewall по умолчанию pin-ит v26.3.27 до завершения интеграционного теста v26.9.9 на OPNsense 26.7.
+> **Политика версий:** установщик использует протестированные бинарники Xray-core 26.3.27 и tun2socks 2.7.0. Обновление этих бинарников — отдельная задача, не связанная с выпуском версии плагина.
 
 ## Установка
 
@@ -69,7 +74,7 @@ Firewall Rules (селективная маршрутизация)
 
 ```sh
 cd /tmp
-git clone https://github.com/SpyLive/os-xray.git
+git clone --branch v3.2.0 https://github.com/Lfyz-git/os-xray.git
 cd os-xray
 sh install.sh
 ```
@@ -77,9 +82,10 @@ sh install.sh
 **Вариант 2 — через архив**
 
 ```sh
-fetch -o /tmp/os-xray-v5.tar https://github.com/SpyLive/os-xray/archive/refs/heads/develop.tar.gz
-cd /tmp && tar xzf os-xray-v5.tar && cd os-xray-develop
-sh install.sh
+fetch -o /tmp/os-xray-v3.2.0.tar.gz https://github.com/Lfyz-git/os-xray/archive/refs/tags/v3.2.0.tar.gz
+mkdir -p /tmp/os-xray-v3.2.0
+tar -xzf /tmp/os-xray-v3.2.0.tar.gz -C /tmp/os-xray-v3.2.0 --strip-components 1
+cd /tmp/os-xray-v3.2.0 && sh install.sh
 ```
 
 Установщик автоматически:
@@ -109,8 +115,8 @@ configctl xray version
 
 ```sh
 cd /root
-git clone --branch main https://github.com/SpyLive/os-xray.git os-xray-main
-cd os-xray-main
+git clone --branch v3.2.0 https://github.com/Lfyz-git/os-xray.git os-xray-v3.2.0
+cd os-xray-v3.2.0
 git rev-parse HEAD              # проверить коммит релиза
 sh upgrade.sh
 configctl xray statusall
@@ -118,7 +124,7 @@ ifconfig proxytun2socks0
 crontab -l | grep 'xray watchdog'
 ```
 
-Для следующих обновлений в этом каталоге: `git fetch origin main && git checkout main && git pull --ff-only`, проверить коммит и примечания к версии, затем `sh upgrade.sh`. Нельзя использовать `sh install.sh uninstall` для обновления: команда удаляет файлы и останавливает VPN. При ошибке проверки восстанавливайте файлы из резервной копии через консоль, а не перезапускайте VPN наугад.
+Для следующих обновлений используйте отдельный каталог с новым **релизным тегом**, предварительно проверьте коммит и примечания к версии, затем выполните `sh upgrade.sh`. Нельзя использовать `sh install.sh uninstall` для обновления: команда удаляет файлы и останавливает VPN. При ошибке проверки восстанавливайте файлы из резервной копии через консоль, а не перезапускайте VPN наугад.
 
 **Проверено на VM 109 (16.10.2026):** обновление `3.1.1 → 3.1.3` и повторное `3.1.3 → 3.1.3` сохранили PID активного Xray/tun2socks и SHA-256 `/conf/config.xml`. Однако **первый Apply после перехода с 3.1.1 перезапустил оба процесса** (`Stopped. Started. OK`); следующий Apply без изменений уже не перезапускал их. Причина первого перезапуска не установлена. Планируйте первый Apply как операцию, способную кратковременно прервать VPN.
 
@@ -128,18 +134,16 @@ crontab -l | grep 'xray watchdog'
 
 ## Настройка в GUI
 
-Обнови браузер (`Ctrl+F5`) → **VPN → Xray**
+Обновите браузер (`Ctrl+F5`) и откройте **VPN → Xray**.
 
-1. Вкладка **Instances** → кнопка **+** (добавить инстанс)
-2. В открывшемся диалоге нажми **Import VLESS link** (сворачиваемая панель вверху) → вставь ссылку → **Parse & Fill**
-   - Ссылка преобразуется в **Outbound Config (JSON)** в актуальном синтаксисе Xray 26.x.
-3. *(Опционально)* можно вручную вставить/изменить валидный Xray **outbound object**. Это не полный top-level config: SOCKS inbound, direct outbound и routing добавляет плагин.
-4. *(Опционально)* Поле **Bypass Networks** — укажи сети, которые должны идти в обход VPN (по умолчанию: частные сети 10/8, 172.16/12, 192.168/16)
-5. *(Опционально)* Кнопка **Validate Config** в footer диалога — сухой прогон конфига через `xray -test` без остановки сервиса
-6. Нажми **Save**, затем вкладка **General** → установи галку **Enable Xray** (и **Enable Watchdog** по желанию)
-7. Нажми **Apply**
-8. Кнопка **Test Connection** — убедись, что туннель работает (показывает HTTP 200)
-9. В таблице инстансов колонка **Status** показывает xray/tun2socks для каждого подключения
+1. Вкладка **Subscriptions** → Add subscription. Укажите HTTPS URL или вставьте VLESS-ссылки, затем **Save and refresh**. Проверьте список нод.
+2. Вкладка **Instances** → создайте или отредактируйте инстанс. Выберите **Manual** (одна подписка и активная нода) либо **LeastLoad** (пул из разных источников и явная резервная нода).
+3. При необходимости включите **Sniffing** и добавьте упорядоченные правила **Custom Routing Rules**. Обход частных сетей идёт первым, затем пользовательские правила, потом маршрут Manual/LeastLoad. **BitTorrent → Direct** направляет трафик в обход удалённой VPN-ноды.
+4. Настройте уникальный TUN, адрес/порт SOCKS и **Bypass Networks** для этого инстанса.
+5. Нажмите **Save**, затем **Validate saved configuration**. Во вкладке **General** включите Xray (и Watchdog по желанию) и нажмите **Apply**.
+6. Проверьте трафик с тестового клиента, состояние сервиса и реально применённый JSON во вкладке **Advanced**. JSON содержит учётные данные соединений.
+
+Источники с вставленными ссылками обновляются вручную. Для HTTPS-подписок cron проверяет необходимость обновления каждые 15 минут; скачивание выполняется только по достижении заданного интервала (по умолчанию шесть часов). Значение 0 отключает автоматическое обновление.
 
 ---
 

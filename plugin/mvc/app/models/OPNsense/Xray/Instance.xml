@@ -16,6 +16,35 @@
                 <Default>default</Default>
                 <Required>N</Required>
             </name>
+            <subscription_uuid type="TextField">
+                <Required>N</Required>
+            </subscription_uuid>
+            <selected_outbound type="TextField">
+                <Required>N</Required>
+            </selected_outbound>
+            <route_mode type="OptionField">
+                <Default>manual</Default>
+                <OptionValues>
+                    <manual>Manual node</manual>
+                    <leastLoad>LeastLoad balancer</leastLoad>
+                </OptionValues>
+            </route_mode>
+            <balancer_nodes type="TextField">
+                <Required>N</Required>
+                <Default>[]</Default>
+            </balancer_nodes>
+            <balancer_fallback type="TextField">
+                <Required>N</Required>
+            </balancer_fallback>
+            <balancer_expected type="IntegerField">
+                <Default>2</Default>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>16</MaximumValue>
+            </balancer_expected>
+            <balancer_tolerance type="TextField">
+                <Default>0.2</Default>
+                <Required>N</Required>
+            </balancer_tolerance>
             <outbound_config type="TextField">
                 <Required>N</Required>
                 <Default></Default>
@@ -44,6 +73,24 @@
                 <MaximumValue>9000</MaximumValue>
                 <Required>Y</Required>
             </mtu>
+            <sniffing_enabled type="BooleanField">
+                <Default>0</Default>
+            </sniffing_enabled>
+            <sniffing_route_only type="BooleanField">
+                <Default>1</Default>
+            </sniffing_route_only>
+            <routing_domain_strategy type="OptionField">
+                <Default>IPIfNonMatch</Default>
+                <OptionValues>
+                    <AsIs>AsIs</AsIs>
+                    <IPIfNonMatch>IPIfNonMatch</IPIfNonMatch>
+                    <IPOnDemand>IPOnDemand</IPOnDemand>
+                </OptionValues>
+            </routing_domain_strategy>
+            <routing_rules type="TextField">
+                <Required>N</Required>
+                <Default>[]</Default>
+            </routing_rules>
             <!-- v1.0.4: bypass_networks — CIDR-список сетей для direct routing -->
             <bypass_networks type="TextField">
                 <Default>10.0.0.0/8,172.16.0.0/12,192.168.0.0/16</Default>

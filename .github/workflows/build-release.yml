@@ -11,7 +11,7 @@ permissions:
 jobs:
   release:
     name: Triggered by New Tag event
-    runs-on: self-hosted  #ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository and create archive
@@ -51,64 +51,21 @@ jobs:
       #    echo "=== Commit count ==="
       #    git rev-list --count HEAD
 
-      - name: Generate changelog to release message
-        id: changelog
+      - name: Prepare release notes
         run: |
-          PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
-          TAG="${GITHUB_REF#refs/tags/}"
-          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ARCHIVE_NAME}.tar.gz"
-
-          {
-            echo "BODY<<EOF"
-            if [ -n "${PREV_TAG}" ]; then
-              echo "## Changes since ${PREV_TAG}"
-              echo ""
-              git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges --reverse
-            else
-              echo "## Initial release 🎉"
-              echo ""
-              git log --pretty=format:"- %s (%h)" --no-merges
-            fi
-
-            echo ""
-            echo ""
-            echo "---"
-            echo "### Fresh installation (OPNsense)"
-            echo "Use this only when the plugin is not installed yet."
-            echo '```sh'
-            echo "fetch -o /tmp/opnsense-xray.tar.gz ${DOWNLOAD_URL}"
-            echo "cd /tmp && tar xzf opnsense-xray.tar.gz"
-            echo "cd opnsense-xray"
-            echo "sh install.sh"
-            echo '```'
-            echo ""
-            echo "### Upgrade an existing 3.x installation"
-            echo "Before upgrading, back up OPNsense and arrange independent console access."
-            echo "Reboot OPNsense first, wait for startup, and confirm the active VPN and TUN are healthy."
-            echo "Do not upgrade while TUN is stuck after Apply on an older version; that state is untested."
-            echo '```sh'
-            echo "configctl xray statusall"
-            echo "ifconfig proxytun2socks0"
-            echo "fetch -o /tmp/opnsense-xray.tar.gz ${DOWNLOAD_URL}"
-            echo "cd /tmp && tar xzf opnsense-xray.tar.gz"
-            echo "cd opnsense-xray"
-            echo "sh upgrade.sh"
-            echo '```'
-            echo "The updater does not stop Xray/tun2socks or invoke Apply."
-            echo "Verify VPN/TUN status after upgrading; do not Apply on a live VPN just to test the update."
-            echo "Updates from 1.x/2.x require a separate migration plan."
-            echo ""
-            echo "See README.md for full precautions and recovery instructions."
-
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          NOTES="RELEASE_NOTES_${GITHUB_REF_NAME}.md"
+          if [ ! -s "$NOTES" ]; then
+            echo "Missing non-empty release notes: $NOTES" >&2
+            exit 1
+          fi
+          cp "$NOTES" "$RUNNER_TEMP/os-xray-release-notes.md"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: "opnsense-xray ${{ steps.version.outputs.VERSION }}"
-          body: ${{ steps.changelog.outputs.BODY }}
+          body_path: ${{ runner.temp }}/os-xray-release-notes.md
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-rc') || contains(steps.version.outputs.VERSION, '-beta') || contains(steps.version.outputs.VERSION, '-alpha') }}
           files: |

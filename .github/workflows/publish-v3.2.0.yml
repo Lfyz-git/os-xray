@@ -1,0 +1,62 @@
+name: Publish os-xray v3.2.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - RELEASE_NOTES_v3.2.0.md
+
+permissions:
+  contents: write
+
+concurrency:
+  group: os-xray-v3.2.0-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Tag and publish verified release archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s RELEASE_NOTES_v3.2.0.md
+          grep -qx 'PLUGIN_VERSION="3.2.0"' install.sh
+          sh -n install.sh
+          sh -n upgrade.sh
+          test -f plugin/scripts/Xray/xray-subscription-refresh.php
+          test -f plugin/mvc/app/views/OPNsense/Xray/partials/subscriptions_ui.volt
+
+      - name: Build archive and SHA-256 checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p opnsense-xray
+          rsync -a --exclude='.git' --exclude='.github' --exclude='opnsense-xray' \
+            ./ opnsense-xray/
+          tar -czf opnsense-xray-v3.2.0.tar.gz opnsense-xray
+          sha256sum opnsense-xray-v3.2.0.tar.gz > SHA256SUMS
+          tar tzf opnsense-xray-v3.2.0.tar.gz | grep -qx 'opnsense-xray/upgrade.sh'
+
+      - name: Create public release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v3.2.0 >/dev/null 2>&1; then
+            echo "v3.2.0 already published; nothing to overwrite"
+            exit 0
+          fi
+          gh release create v3.2.0 \
+            opnsense-xray-v3.2.0.tar.gz SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "opnsense-xray v3.2.0" \
+            --notes-file RELEASE_NOTES_v3.2.0.md \
+            --latest
