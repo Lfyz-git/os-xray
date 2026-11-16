@@ -181,45 +181,137 @@ $(function () {
 
     $('a[href="#subscriptions"]').on('shown.bs.tab', refreshSourceList);
 
-    // Two selectors in each instance editor. Hidden text fields remain bound to
-    // OPNsense BaseForm so normal Save keeps working.
+    // Keep OPNsense BaseForm fields bound to the normal Save API, replacing
+    // technical tag/JSON inputs with user-facing selectors and checkboxes.
     var $instance = $('#DialogInstance');
-    function installSelect(fieldId, selectId, placeholder) {
-        var $field = $instance.find('[id="' + fieldId + '"]');
+    function instanceField(name) {
+        return $instance.find('[id="instance.' + name + '"]');
+    }
+
+    function installSelect(fieldName, selectId, placeholder) {
+        var $field = instanceField(fieldName);
         if (!$field.length) return null;
         $field.hide();
         var $select = $('#' + selectId);
         if (!$select.length) {
             $select = $('<select class="form-control">').attr('id', selectId).insertAfter($field);
-            $select.on('change', function () { $field.val($select.val()).trigger('change'); });
+            $select.on('change', function () {
+                $field.val($select.val()).trigger('change');
+            });
         }
         $select.empty().append($('<option>').val('').text(placeholder));
         return {field: $field, select: $select};
     }
 
-    function fillInstanceNodes(sourceUuid, current) {
-        var node = installSelect('instance.selected_outbound', 'xrayInstanceNode', 'First node (default)');
-        if (!node) return;
+    function installPool() {
+        var $field = instanceField('balancer_nodes');
+        if (!$field.length) return null;
+        $field.hide();
+        var $pool = $('#xrayInstancePool');
+        if (!$pool.length) {
+            $pool = $('<div id="xrayInstancePool" class="well well-sm" ' +
+                'style="max-height:200px;overflow-y:auto;margin:4px 0;">' +
+                'Select a subscription first.</div>').insertAfter($field);
+        }
+        return {field: $field, pool: $pool};
+    }
+
+    function readPool(raw) {
+        try {
+            var data = JSON.parse(raw || '[]');
+            return Array.isArray(data) ? data.filter(function (x) { return typeof x === 'string'; }) : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function setVisibleRoutingMode() {
+        var balanced = instanceField('route_mode').val() === 'leastLoad';
+        $('#xrayInstancePool,#xrayInstanceFallback').toggle(balanced);
+        $('#xrayInstanceNode').toggle(!balanced);
+        // These fields are used only by LeastLoad. Keep the values intact
+        // when switching back to Manual; switching mode must not erase work.
+        ['balancer_expected', 'balancer_tolerance'].forEach(function (name) {
+            var $field = instanceField(name);
+            $field.closest('.form-group').toggle(balanced);
+        });
+    }
+
+    function fillInstanceNodes(sourceUuid, initial) {
+        var manual = installSelect('selected_outbound', 'xrayInstanceNode', 'First node (default)');
+        var fallback = installSelect('balancer_fallback', 'xrayInstanceFallback', 'Choose a fallback node');
+        var pool = installPool();
+        if (!manual || !fallback || !pool) return;
+
+        pool.pool.empty().text(sourceUuid ? 'Loading nodes…' : 'Select a subscription first.');
         if (!sourceUuid) {
-            node.field.val('');
+            manual.field.val('');
+            fallback.field.val('');
+            pool.field.val('[]');
             return;
         }
         $.getJSON('/api/xray/subscription/nodes/' + encodeURIComponent(sourceUuid))
             .done(function (data) {
-                (data.nodes || []).forEach(function (entry) {
-                    node.select.append($('<option>').val(entry.tag).text(entry.tag));
+                // Ignore a response for a previous source when rapidly editing.
+                if ($('#xrayInstanceSource').val() !== sourceUuid) return;
+                if (!data || data.result !== 'ok') {
+                    pool.pool.text('Could not load subscription nodes.');
+                    return;
+                }
+                pool.pool.empty();
+                var tags = (data.nodes || []).map(function (item) { return item.tag; });
+                (data.nodes || []).forEach(function (item) {
+                    manual.select.append($('<option>').val(item.tag).text(item.tag));
+                    fallback.select.append($('<option>').val(item.tag).text(item.tag));
                 });
-                node.select.val(current);
-                if (node.select.val() !== current) node.select.val('');
-                node.field.val(node.select.val());
-            });
+
+                function selectExisting(selector, field, tag) {
+                    if (tag && tags.indexOf(tag) === -1) {
+                        selector.append($('<option>').val(tag).text('Missing: ' + tag));
+                    }
+                    selector.val(tag || '');
+                    field.val(selector.val());
+                }
+                selectExisting(manual.select, manual.field, initial.manual);
+                selectExisting(fallback.select, fallback.field, initial.fallback);
+
+                var chosen = readPool(initial.pool);
+                (data.nodes || []).forEach(function (item, idx) {
+                    var id = 'xrayPoolItem' + idx;
+                    var $label = $('<label class="checkbox" style="display:block;margin:3px 0;">');
+                    var $check = $('<input type="checkbox">').attr('id', id)
+                        .val(item.tag).prop('checked', chosen.indexOf(item.tag) !== -1);
+                    $label.append($check).append($('<span>').text(' ' + item.tag)).appendTo(pool.pool);
+                });
+                var missing = chosen.filter(function (name) { return tags.indexOf(name) === -1; });
+                if (missing.length) {
+                    $('<div class="text-danger">').text(
+                        'Missing pool nodes: ' + missing.join(', ') + '. Update the pool before Apply.'
+                    ).appendTo(pool.pool);
+                }
+                pool.pool.off('change', 'input').on('change', 'input', function () {
+                    var values = pool.pool.find('input:checked').map(function () {
+                        return $(this).val();
+                    }).get();
+                    pool.field.val(JSON.stringify(values)).trigger('change');
+                });
+                setVisibleRoutingMode();
+            })
+            .fail(function () { pool.pool.text('Cannot fetch subscription nodes.'); });
     }
 
     $instance.on('shown.bs.modal', function () {
-        var src = installSelect('instance.subscription_uuid', 'xrayInstanceSource', 'Manual JSON (Advanced)');
+        var src = installSelect('subscription_uuid', 'xrayInstanceSource',
+            'Manual JSON (Advanced)');
         if (!src) return;
         var current = src.field.val();
-        var active = $instance.find('[id="instance.selected_outbound"]').val() || '';
+        var state = {
+            manual: instanceField('selected_outbound').val() || '',
+            fallback: instanceField('balancer_fallback').val() || '',
+            pool: instanceField('balancer_nodes').val() || '[]'
+        };
+        installPool();
+        setVisibleRoutingMode();
         sources(function (rows) {
             rows.forEach(function (row) {
                 if (String(row.enabled) !== '0') {
@@ -228,13 +320,15 @@ $(function () {
             });
             src.select.val(current);
             if (src.select.val() !== current) src.select.val('');
-            fillInstanceNodes(src.select.val(), active);
+            fillInstanceNodes(src.select.val(), state);
         });
     });
 
     $instance.on('change', '#xrayInstanceSource', function () {
-        fillInstanceNodes($(this).val(), '');
+        fillInstanceNodes($(this).val(), {manual:'', fallback:'', pool:'[]'});
     });
+
+    $instance.on('change', '[id="instance.route_mode"]', setVisibleRoutingMode);
 
     // Advanced displays exactly the last applied config file, never a newly
     // assembled subscription preview or an unsaved candidate.
