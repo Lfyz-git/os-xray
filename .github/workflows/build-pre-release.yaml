@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     name: Build on release* push
-    runs-on: self-hosted  #ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -29,8 +29,9 @@ jobs:
 
       - name: Prepare build archive
         run: |
-          ARCHIVE_DIR="opnsense-xray-pre-${{ github.ref_name }}"
-          ARCHIVE_NAME="opnsense-xray-pre-${{ github.ref_name }}-${{ steps.date.outputs.DATE }}-${{ steps.commit.outputs.SHORT_HASH }}"
+          SAFE_REF=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
+          ARCHIVE_DIR="opnsense-xray-pre-${SAFE_REF}"
+          ARCHIVE_NAME="opnsense-xray-pre-${SAFE_REF}-${{ steps.date.outputs.DATE }}-${{ steps.commit.outputs.SHORT_HASH }}"
           mkdir -p "${ARCHIVE_DIR}"
 
           # Копируем все файлы, необходимые для установки.
