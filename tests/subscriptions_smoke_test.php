@@ -193,5 +193,25 @@ namespace {
         } catch (\InvalidArgumentException $e) { /* expected */ }
     }
 
+    // The GUI follows the firewall timezone, not the browser timezone.
+    // Refresh timestamps stay UTC in config.xml and are converted on read.
+    $time = '2026-11-16 14:37:04 UTC';
+    $expectedTimes = [
+        'Europe/Moscow' => '2026-11-16 17:37:04 MSK',
+        'Europe/Prague' => '2026-11-16 15:37:04 CET',
+        'Etc/UTC' => '2026-11-16 14:37:04 UTC',
+        'Invalid/Zone' => '2026-11-16 14:37:04 UTC',
+    ];
+    foreach ($expectedTimes as $timezone => $expectedTime) {
+        if (xray_subscription_display_time($time, $timezone) !== $expectedTime) {
+            throw new \RuntimeException('Subscription GUI timezone conversion failed: ' . $timezone);
+        }
+    }
+    if (xray_subscription_display_time('2026-07-16 14:37:04 UTC', 'Europe/Prague')
+        !== '2026-07-16 16:37:04 CEST' ||
+        xray_subscription_display_time('', 'Europe/Moscow') !== '') {
+        throw new \RuntimeException('Subscription DST or empty display time failed');
+    }
+
     echo "subscription smoke: OK\n";
 }
