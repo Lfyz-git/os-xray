@@ -378,8 +378,18 @@ $(function () {
                     $('#xrayAdvancedJson').val(formatted);
                     $('#xrayAdvancedCopy').prop('disabled', false);
                     var state = response.xray_core === 'running' ? 'Xray running' : 'Xray stopped';
-                    var defaultTag = response.default_outbound || '(not defined)';
-                    $('#xrayAdvancedSummary').text(state + ' | Default outbound: ' + defaultTag);
+                    var balancers = (response.config.routing || {}).balancers || [];
+                    if (balancers.length) {
+                        var balancer = balancers[0];
+                        $('#xrayAdvancedSummary').text(
+                            state + ' | LeastLoad pool: ' + (balancer.selector || []).join(', ') +
+                            ' | Fallback: ' + (balancer.fallbackTag || '(none)')
+                        );
+                    } else {
+                        $('#xrayAdvancedSummary').text(
+                            state + ' | Manual node: ' + (response.default_outbound || '(not defined)')
+                        );
+                    }
                     advancedStatus(
                         'Last applied on-disk config. Includes all declared outbounds, inbounds ' +
                         'and routing rules. The first outbound is the default for traffic ' +
