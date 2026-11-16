@@ -28,6 +28,10 @@ Independent release of [Lfyz-git/os-xray](https://github.com/Lfyz-git/os-xray), 
 - Actual BitTorrent sessions were not generated; protocol classification relies on Xray-core.
 - No deployment to the production Styx router is claimed.
 
+## Archive integrity
+
+The release provides `opnsense-xray-v3.2.0.tar.gz` together with `SHA256SUMS`. Verify the downloaded archive against its checksum before installation.
+
 ## Links
 
 - Feature PR: https://github.com/Lfyz-git/os-xray/pull/2
