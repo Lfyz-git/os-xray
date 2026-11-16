@@ -113,6 +113,68 @@ function xray_prepare_balancer_sources(array $c, array $sources): array
     return $c;
 }
 
+/**
+ * Compile a short ordered GUI ruleset, never a raw arbitrary Xray config.
+ * Each entry is {kind, match, target}, where target is proxy/direct/block.
+ */
+function xray_custom_rules(string $raw, bool $sniffingEnabled): array
+{
+    try {
+        $rules = json_decode(trim($raw) === '' ? '[]' : $raw, true, 512, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        throw new InvalidArgumentException('Custom routing rules must be a JSON array');
+    }
+    if (!is_array($rules) || !array_is_list($rules) || count($rules) > 50) {
+        throw new InvalidArgumentException('Custom routing requires an array of at most 50 rules');
+    }
+    $parsed = [];
+    foreach ($rules as $position => $rule) {
+        if (!is_array($rule) || array_is_list($rule) ||
+            array_diff(array_keys($rule), ['kind', 'match', 'target'])) {
+            throw new InvalidArgumentException('Invalid custom routing rule #' . ($position + 1));
+        }
+        $kind = $rule['kind'] ?? null;
+        $match = $rule['match'] ?? null;
+        $target = $rule['target'] ?? null;
+        if (!is_string($kind) || !in_array($kind, ['protocol', 'domain', 'ip', 'port'], true) ||
+            !is_string($match) || trim($match) === '' ||
+            !is_string($target) || !in_array($target, ['proxy', 'direct', 'block'], true)) {
+            throw new InvalidArgumentException('Invalid condition or action in routing rule #' . ($position + 1));
+        }
+        $match = trim($match);
+        $field = ['type' => 'field', 'inboundTag' => ['socks-in']];
+        if ($kind === 'protocol') {
+            if (!$sniffingEnabled) {
+                throw new InvalidArgumentException('Protocol routing requires Sniffing enabled');
+            }
+            $values = array_values(array_filter(array_map('trim', explode(',', strtolower($match)))));
+            if (!$values || array_diff($values, ['http', 'tls', 'quic', 'bittorrent'])) {
+                throw new InvalidArgumentException('Unsupported sniffed protocol in routing rule #' . ($position + 1));
+            }
+            $field['protocol'] = $values;
+        } elseif ($kind === 'domain' || $kind === 'ip') {
+            $values = array_values(array_filter(array_map('trim', explode(',', $match)), 'strlen'));
+            if (!$values || count($values) > 100) {
+                throw new InvalidArgumentException('Invalid domain/IP list in routing rule #' . ($position + 1));
+            }
+            $field[$kind] = $values;
+        } else {
+            if (!preg_match('/^[0-9]{1,5}(?:-[0-9]{1,5})?(?:\s*,\s*[0-9]{1,5}(?:-[0-9]{1,5})?)*$/D', $match)) {
+                throw new InvalidArgumentException('Invalid port list in routing rule #' . ($position + 1));
+            }
+            foreach (explode(',', $match) as $portRange) {
+                $endpoints = array_map('intval', explode('-', trim($portRange)));
+                if (min($endpoints) < 1 || max($endpoints) > 65535 || $endpoints[0] > end($endpoints)) {
+                    throw new InvalidArgumentException('Port must be between 1 and 65535');
+                }
+            }
+            $field['port'] = $match;
+        }
+        $parsed[] = ['field' => $field, 'target' => $target];
+    }
+    return $parsed;
+}
+
 function xray_build_config(array $c): array
 {
     $raw = trim($c['outbound_config'] ?? '');
@@ -127,7 +189,7 @@ function xray_build_config(array $c): array
     if (!$outbounds) {
         throw new InvalidArgumentException("At least one Xray outbound is required");
     }
-    $tags = ['direct' => true];  // The local bypass outbound is always reserved.
+    $tags = ['direct' => true, 'block' => true];  // Reserved local routing outbounds.
     foreach ($outbounds as $outbound) {
         if (!is_array($outbound) || !is_string($outbound['protocol'] ?? null)
             || trim($outbound['protocol']) === '') {
@@ -138,7 +200,7 @@ function xray_build_config(array $c): array
             continue; // Xray accepts an untagged default outbound.
         }
         if (!is_string($tag) || trim($tag) === '' || isset($tags[$tag])) {
-            throw new InvalidArgumentException("Outbound tags must be non-empty, unique and not 'direct'");
+            throw new InvalidArgumentException("Outbound tags must be unique, non-empty and not reserved (direct/block)");
         }
         $tags[$tag] = true;
     }
@@ -214,14 +276,6 @@ function xray_build_config(array $c): array
                 ],
             ],
         ]];
-        // Direct bypass must remain first; all other SOCKS traffic enters the
-        // balancer through an explicit catch-all rule.
-        $routing['rules'][] = [
-            'type' => 'field',
-            'inboundTag' => ['socks-in'],
-            'network' => 'tcp,udp',
-            'balancerTag' => 'proxy-balance',
-        ];
         $burst = [
             'subjectSelector' => array_keys($chosen),
             'pingConfig' => [
@@ -256,7 +310,41 @@ function xray_build_config(array $c): array
         $outbounds = [$outbounds[0]];
     }
 
+    // Protected private-net bypass stays first. User rules are ordered next,
+    // and the LeastLoad catch-all is always last.
+    $sniffingEnabled = (string)($c['sniffing_enabled'] ?? '0') === '1';
+    $customRules = xray_custom_rules((string)($c['routing_rules'] ?? '[]'), $sniffingEnabled);
+    $usesBlock = false;
+    foreach ($customRules as $rule) {
+        $field = $rule['field'];
+        if ($rule['target'] === 'direct') {
+            $field['outboundTag'] = 'direct';
+        } elseif ($rule['target'] === 'block') {
+            $field['outboundTag'] = 'block';
+            $usesBlock = true;
+        } elseif ($mode === 'leastLoad') {
+            $field['balancerTag'] = 'proxy-balance';
+        } else {
+            // Single untagged manual outbounds are legal when no routing rule
+            // references them. Give one a stable tag when explicitly targeted.
+            if (!isset($outbounds[0]['tag'])) $outbounds[0]['tag'] = 'proxy-main';
+            $field['outboundTag'] = $outbounds[0]['tag'];
+        }
+        $routing['rules'][] = $field;
+    }
+    if ($mode === 'leastLoad') {
+        $routing['rules'][] = [
+            'type' => 'field',
+            'inboundTag' => ['socks-in'],
+            'network' => 'tcp,udp',
+            'balancerTag' => 'proxy-balance',
+        ];
+    }
+
     $outbounds[] = ['tag' => 'direct', 'protocol' => 'freedom'];
+    if ($usesBlock) {
+        $outbounds[] = ['tag' => 'block', 'protocol' => 'blackhole'];
+    }
     $result = [
         'log'      => ['loglevel' => $c['loglevel'] ?? 'warning'],
         'inbounds' => [[
@@ -269,6 +357,13 @@ function xray_build_config(array $c): array
         'outbounds' => $outbounds,
         'routing'   => $routing,
     ];
+    if ($sniffingEnabled) {
+        $result['inbounds'][0]['sniffing'] = [
+            'enabled' => true,
+            'destOverride' => ['http', 'tls'],
+            'routeOnly' => (string)($c['sniffing_route_only'] ?? '1') !== '0',
+        ];
+    }
     if ($burst !== null) {
         $result['burstObservatory'] = $burst;
     }
