@@ -227,89 +227,134 @@ $(function () {
 
     function setVisibleRoutingMode() {
         var balanced = instanceField('route_mode').val() === 'leastLoad';
-        $('#xrayInstancePool,#xrayInstanceFallback').toggle(balanced);
-        $('#xrayInstanceNode').toggle(!balanced);
-        // These fields are used only by LeastLoad. Keep the values intact
-        // when switching back to Manual; switching mode must not erase work.
-        ['balancer_expected', 'balancer_tolerance'].forEach(function (name) {
-            var $field = instanceField(name);
-            $field.closest('.form-group').toggle(balanced);
+        ['subscription_uuid', 'selected_outbound'].forEach(function (name) {
+            instanceField(name).closest('.form-group').toggle(!balanced);
         });
+        ['balancer_nodes', 'balancer_fallback', 'balancer_expected', 'balancer_tolerance']
+            .forEach(function (name) {
+                instanceField(name).closest('.form-group').toggle(balanced);
+            });
     }
 
-    function fillInstanceNodes(sourceUuid, initial) {
+    var nodeLoadEpoch = 0;
+    function fillInstanceNodes(primaryId, initial, sourceRows) {
         var manual = installSelect('selected_outbound', 'xrayInstanceNode', 'First node (default)');
         var fallback = installSelect('balancer_fallback', 'xrayInstanceFallback', 'Choose a fallback node');
         var pool = installPool();
         if (!manual || !fallback || !pool) return;
+        var epoch = ++nodeLoadEpoch;
+        var sourceList = (sourceRows || []).filter(function (row) {
+            return String(row.enabled) !== '0';
+        });
+        var qualifiedRx = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}::/i;
+        function qualify(tag) {
+            if (!tag || qualifiedRx.test(tag)) return tag || '';
+            return primaryId ? primaryId + '::' + tag : tag;
+        }
+        var chosen = readPool(initial.pool).map(qualify);
+        var selectedFallback = qualify(initial.fallback);
+        var records = [];
+        var failures = [];
 
-        pool.pool.empty().text(sourceUuid ? 'Loading nodes…' : 'Select a subscription first.');
-        if (!sourceUuid) {
-            manual.field.val('');
-            fallback.field.val('');
-            pool.field.val('[]');
+        pool.pool.empty().text(sourceList.length ? 'Loading nodes from all subscriptions…' :
+            'Add and refresh a subscription to select LeastLoad nodes.');
+        if (!sourceList.length) {
+            setVisibleRoutingMode();
             return;
         }
-        $.getJSON('/api/xray/subscription/nodes/' + encodeURIComponent(sourceUuid))
-            .done(function (data) {
-                // Ignore a response for a previous source when rapidly editing.
-                if ($('#xrayInstanceSource').val() !== sourceUuid) return;
-                if (!data || data.result !== 'ok') {
-                    pool.pool.text('Could not load subscription nodes.');
-                    return;
-                }
-                pool.pool.empty();
-                var tags = (data.nodes || []).map(function (item) { return item.tag; });
-                (data.nodes || []).forEach(function (item) {
-                    manual.select.append($('<option>').val(item.tag).text(item.tag));
-                    fallback.select.append($('<option>').val(item.tag).text(item.tag));
-                });
 
-                function selectExisting(selector, field, tag) {
-                    if (tag && tags.indexOf(tag) === -1) {
-                        selector.append($('<option>').val(tag).text('Missing: ' + tag));
+        function addPoolChoice(value, label, checked, missing) {
+            var $label = $('<label class="xray-pool-choice">').css({
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '5px 10px', margin: '0', width: '100%',
+                cursor: 'pointer', fontWeight: 'normal'
+            });
+            var $checkbox = $('<input type="checkbox">').val(value)
+                .prop('checked', checked)
+                .css({position: 'static', margin: '0', flex: '0 0 auto'});
+            $label.append($checkbox).append($('<span>').text(label));
+            if (missing) $label.addClass('text-danger');
+            pool.pool.append($label);
+        }
+
+        function renderNodes() {
+            if (epoch !== nodeLoadEpoch) return;
+            pool.pool.empty();
+            var known = {};
+            var manualTags = [];
+
+            records.forEach(function (record) {
+                var value = record.sourceId + '::' + record.tag;
+                var caption = record.sourceName + ' / ' + record.tag;
+                known[value] = true;
+                fallback.select.append($('<option>').val(value).text(caption));
+                addPoolChoice(value, caption, chosen.indexOf(value) !== -1, false);
+                if (record.sourceId === primaryId) {
+                    manualTags.push(record.tag);
+                    manual.select.append($('<option>').val(record.tag).text(record.tag));
+                }
+            });
+
+            if (initial.manual && manualTags.indexOf(initial.manual) === -1) {
+                manual.select.append($('<option>').val(initial.manual)
+                    .text('Missing: ' + initial.manual));
+            }
+            manual.select.val(initial.manual || '');
+            manual.field.val(manual.select.val() || '');
+
+            if (selectedFallback && !known[selectedFallback]) {
+                fallback.select.append($('<option>').val(selectedFallback)
+                    .text('Missing: ' + selectedFallback));
+            }
+            fallback.select.val(selectedFallback);
+            fallback.field.val(fallback.select.val() || '');
+
+            chosen.forEach(function (value) {
+                if (!known[value]) {
+                    addPoolChoice(value, 'Missing: ' + value, true, true);
+                }
+            });
+            if (failures.length) {
+                $('<div class="text-danger">').text(
+                    'Could not load nodes from: ' + failures.join(', ')
+                ).appendTo(pool.pool);
+            }
+            pool.pool.off('change', 'input').on('change', 'input', function () {
+                var values = pool.pool.find('input:checked').map(function () {
+                    return $(this).val();
+                }).get();
+                pool.field.val(JSON.stringify(values)).trigger('change');
+            });
+            // Convert existing single-subscription names to stable refs on
+            // ordinary Save without requiring users to reselect every node.
+            pool.field.val(JSON.stringify(chosen));
+            setVisibleRoutingMode();
+        }
+
+        var pending = sourceList.length;
+        sourceList.forEach(function (source) {
+            $.getJSON('/api/xray/subscription/nodes/' + encodeURIComponent(source.uuid))
+                .done(function (data) {
+                    if (epoch !== nodeLoadEpoch) return;
+                    if (!data || data.result !== 'ok') {
+                        failures.push(source.name || source.uuid);
+                        return;
                     }
-                    selector.val(tag || '');
-                    field.val(selector.val());
-                }
-                selectExisting(manual.select, manual.field, initial.manual);
-                selectExisting(fallback.select, fallback.field, initial.fallback);
-
-                var chosen = readPool(initial.pool);
-                (data.nodes || []).forEach(function (item, idx) {
-                    var id = 'xrayPoolItem' + idx;
-                    // Do not use Bootstrap's .checkbox class on a <label>:
-                    // it absolutely positions the input outside the pool box.
-                    var $label = $('<label class="xray-pool-choice">').css({
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '5px 10px',
-                        margin: '0',
-                        width: '100%',
-                        cursor: 'pointer',
-                        fontWeight: 'normal'
+                    (data.nodes || []).forEach(function (item) {
+                        records.push({
+                            sourceId: source.uuid,
+                            sourceName: source.name || source.uuid,
+                            tag: item.tag
+                        });
                     });
-                    var $check = $('<input type="checkbox">').attr('id', id)
-                        .val(item.tag).prop('checked', chosen.indexOf(item.tag) !== -1)
-                        .css({position: 'static', margin: '0', flex: '0 0 auto'});
-                    $label.append($check).append($('<span>').text(item.tag)).appendTo(pool.pool);
+                })
+                .fail(function () {
+                    if (epoch === nodeLoadEpoch) failures.push(source.name || source.uuid);
+                })
+                .always(function () {
+                    if (--pending === 0) renderNodes();
                 });
-                var missing = chosen.filter(function (name) { return tags.indexOf(name) === -1; });
-                if (missing.length) {
-                    $('<div class="text-danger">').text(
-                        'Missing pool nodes: ' + missing.join(', ') + '. Update the pool before Apply.'
-                    ).appendTo(pool.pool);
-                }
-                pool.pool.off('change', 'input').on('change', 'input', function () {
-                    var values = pool.pool.find('input:checked').map(function () {
-                        return $(this).val();
-                    }).get();
-                    pool.field.val(JSON.stringify(values)).trigger('change');
-                });
-                setVisibleRoutingMode();
-            })
-            .fail(function () { pool.pool.text('Cannot fetch subscription nodes.'); });
+        });
     }
 
     $instance.on('shown.bs.modal', function () {
@@ -325,6 +370,7 @@ $(function () {
         installPool();
         setVisibleRoutingMode();
         sources(function (rows) {
+            src.select.empty().append($('<option>').val('').text('Manual JSON (Advanced)'));
             rows.forEach(function (row) {
                 if (String(row.enabled) !== '0') {
                     src.select.append($('<option>').val(row.uuid).text(row.name || row.uuid));
@@ -332,12 +378,18 @@ $(function () {
             });
             src.select.val(current);
             if (src.select.val() !== current) src.select.val('');
-            fillInstanceNodes(src.select.val(), state);
+            fillInstanceNodes(src.select.val(), state, rows);
         });
     });
 
     $instance.on('change', '#xrayInstanceSource', function () {
-        fillInstanceNodes($(this).val(), {manual:'', fallback:'', pool:'[]'});
+        sources(function (rows) {
+            fillInstanceNodes($('#xrayInstanceSource').val(), {
+                manual: '',
+                fallback: instanceField('balancer_fallback').val() || '',
+                pool: instanceField('balancer_nodes').val() || '[]'
+            }, rows);
+        });
     });
 
     $instance.on('change', '[id="instance.route_mode"]', setVisibleRoutingMode);
