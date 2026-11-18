@@ -1,0 +1,8 @@
+# Local FreeBSD build products and signing secrets
+dist/
+opnsense-plugins/
+work/
+site/
+*.key
+*.pem
+*.p12
