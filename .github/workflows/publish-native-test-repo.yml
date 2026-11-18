@@ -67,6 +67,9 @@ jobs:
           prepare: |
             set -eu
             pkg clean -ay
+            # Only in the disposable FreeBSD build VM: remove old repo databases.
+            # A failed update must not leave a previously downloaded catalogue usable.
+            rm -f /var/db/pkg/repo-*.sqlite
             echo 'Refreshing official FreeBSD package catalogues (no cached fallback)...'
             timeout 240 pkg -o FETCH_RETRY=1 -o FETCH_TIMEOUT=20 update -f || {
               echo 'Official FreeBSD package catalogue unavailable; refusing to publish.' >&2
@@ -77,7 +80,17 @@ jobs:
               echo 'Fresh FreeBSD dependencies unavailable; refusing to publish.' >&2
               exit 1
             }
-            pkg info xray-core php85-curl
+            # Reject an already-installed version that differs from the just
+            # refreshed official catalogue (e.g. a preloaded VM image).
+            for name in xray-core php85-curl; do
+              available=$(pkg rquery -U -r FreeBSD-ports '%v' "$name")
+              installed=$(pkg query '%v' "$name")
+              if [ -z "$available" ] || [ "$available" != "$installed" ]; then
+                echo "Dependency $name does not match the fresh official catalogue; refusing to publish." >&2
+                exit 1
+              fi
+              echo "Fresh dependency verified: $name $installed"
+            done
           run: |
             set -eu
             # Always rebuild packages in this VM. Stale artifacts and cached
