@@ -34,11 +34,13 @@ official OPNsense catalog on request, and explicitly upgrade only `xray-core`
 through `pkg upgrade -r OPNsense xray-core`.
 
 Safeguards: the update action requires the core to be owned by `pkg`,
-declines to run while Xray or tun2socks processes are active, serializes
-updates, validates all applied configs before and after changing binaries,
-and never performs automatic Apply, Start, Stop, or Restart. If validation
-fails after an upgrade, the user must restore a known-good package/version
-before starting services. Automatic rollback is **not** implemented.
+serializes updates, validates all applied configs before changing binaries,
+records running instances, stops only those instances and validates the updated
+core before restarting only previously running instances. Explicitly stopped
+profiles remain stopped. This intentionally interrupts VPN sessions. An
+unmanaged running process blocks the upgrade. If package upgrade or
+post-update validation fails, tunnels remain stopped for manual intervention.
+Automatic core downgrade/rollback is **not** implemented.
 
 The backend must be exercised on OPNsense-Lab with actual pkg metadata and
 a noncritical instance before this feature is merged or used on Styx.
