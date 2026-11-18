@@ -266,6 +266,12 @@ namespace {
             // expected
         }
     }
+    // OPNsense /usr/local/opnsense/version/core contains JSON product metadata.
+    if (xray_subscription_os_version('{"product_version":"26.7.10","product_name":"OPNsense"}') !== '26.7.10' ||
+        xray_subscription_os_version('not json') !== 'unknown' ||
+        xray_subscription_os_version('{"product_version":"26.7\\r\\nInjected: 1"}') !== 'unknown') {
+        throw new \RuntimeException('OPNsense version metadata parsing failed');
+    }
     $httpHeaders = xray_subscription_headers('pre-registered-device');
     if (!in_array('User-Agent: os-xray/3.2.1', $httpHeaders, true) ||
         !in_array('X-HWID: pre-registered-device', $httpHeaders, true) ||
