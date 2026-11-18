@@ -40,6 +40,7 @@ name: xray-tun2socks
 version: "$T2S_VERSION"
 origin: net/xray-tun2socks
 comment: Dedicated tun2socks binary for private os-xray OPNsense plugin
+desc: Dedicated, checksum-verified tun2socks executable for os-xray
 maintainer: N/A
 www: https://github.com/xjasonlyu/tun2socks
 prefix: /usr/local
