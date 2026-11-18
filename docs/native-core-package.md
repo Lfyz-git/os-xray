@@ -51,3 +51,4 @@ a noncritical instance before this feature is merged or used on Styx.
 - Historical configuration schema migrations or support for script-installed cores.
 - An embedded downloader for arbitrary upstream GitHub Release binaries.
 - Automatic core updates without an explicit administrative action.
+- Automatic package downgrade after an unsuccessful update.
