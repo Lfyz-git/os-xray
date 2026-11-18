@@ -5,7 +5,8 @@ set -eu
 
 [ "$#" -eq 2 ] || { echo "Usage: $0 PACKAGE_DIR SITE_DIR" >&2; exit 2; }
 PKG_DIR=$(CDPATH= cd -- "$1" && pwd)
-SITE="$2"
+mkdir -p "$2"
+SITE=$(CDPATH= cd -- "$2" && pwd)
 : "${OS_XRAY_REPO_KEY_B64:?Set the private Actions secret OS_XRAY_REPO_KEY_B64}"
 command -v pkg >/dev/null
 command -v openssl >/dev/null
