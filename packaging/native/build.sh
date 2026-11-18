@@ -20,7 +20,7 @@ command -v pkg >/dev/null 2>&1
 command -v unzip >/dev/null 2>&1
 command -v fetch >/dev/null 2>&1
 pkg info -e xray-core || { echo "Install FreeBSD/OPNsense xray-core first" >&2; exit 1; }
-pkg info -e php84-curl || { echo "Install php84-curl first" >&2; exit 1; }
+pkg info -e php85-curl || { echo "Install php85-curl first" >&2; exit 1; }
 
 mkdir -p "$DEST" "$WORK" "$PORT"
 # Use pinned, checksummed upstream release to construct a separate binary

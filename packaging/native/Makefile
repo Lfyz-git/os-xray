@@ -5,7 +5,7 @@ PLUGIN_VERSION=        3.3.0
 PLUGIN_DEVEL=          
 PLUGIN_TIER=           4
 PLUGIN_COMMENT=        Xray-core VPN client with TUN routing and subscriptions
-PLUGIN_DEPENDS=        xray-core xray-tun2socks php84-curl
+PLUGIN_DEPENDS=        xray-core xray-tun2socks php85-curl
 PLUGIN_MAINTAINER=     N/A
 PLUGIN_WWW=            https://github.com/Lfyz-git/os-xray
 

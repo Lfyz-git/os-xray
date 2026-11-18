@@ -13,11 +13,11 @@ including OPNsense plugin metadata, generated package hooks and dependencies.
 - **xray-tun2socks 2.7.0**: separately packaged FreeBSD amd64 upstream binary,
   downloaded with pinned SHA-256 and installed under
   `/usr/local/libexec/os-xray/tun2socks`, never on top of an official package.
-- **php84-curl**: normal OPNsense package needed by HTTPS subscriptions.
+- **php85-curl**: normal OPNsense package needed by HTTPS subscriptions.
 
 The native plugin depends on the three other packages. A future private
 repository will carry `os-xray` and `xray-tun2socks`; the official OPNsense
-repository provides `xray-core` and `php84-curl`.
+repository provides `xray-core` and `php85-curl`.
 
 ## Build
 
