@@ -24,6 +24,9 @@
             <links type="TextField">
                 <Required>N</Required>
             </links>
+            <hwid type="TextField">
+                <Required>N</Required>
+            </hwid>
             <refresh_interval type="IntegerField">
                 <Default>360</Default>
                 <MinimumValue>0</MinimumValue>
