@@ -35,6 +35,14 @@
                         <label for="xraySourceUrl">Subscription URL</label>
                         <input type="url" class="form-control" id="xraySourceUrl" placeholder="https://provider.example/subscription/...">
                     </div>
+                    <div class="form-group" id="xraySourceHwidGroup">
+                        <label for="xraySourceHwid">Device HWID (HTTPS subscriptions)</label>
+                        <input type="text" class="form-control" id="xraySourceHwid" autocomplete="off"
+                               maxlength="128" placeholder="Auto-generated when saved if empty">
+                        <span class="help-block">Stable per-subscription device ID for PasarGuard (X-HWID).
+                            Leave empty to generate once; enter an existing HWID to reuse a registered device.
+                            Changing it may consume another device slot on the provider.</span>
+                    </div>
                     <div class="form-group">
                         <label for="xraySourceInterval">Auto-refresh interval (minutes)</label>
                         <input type="number" class="form-control" id="xraySourceInterval"
