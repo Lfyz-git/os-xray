@@ -122,9 +122,12 @@ try {
         $source->last_checked = (string)$now;
         $saved = true;
         try {
+            $oldHwid = (string)($source->hwid ?? '');
+            $hwid = xray_subscription_hwid($oldHwid);
+            if ($hwid !== $oldHwid) $source->hwid = $hwid;
             $list = xray_subscription_import(
                 'url', (string)$source->url, '',
-                [ImportController::class, 'parseVless']
+                [ImportController::class, 'parseVless'], $hwid
             );
             $json = json_encode($list, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
             $old = (string)($source->outbounds ?? '');

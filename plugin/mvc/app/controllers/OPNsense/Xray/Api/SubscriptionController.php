@@ -52,14 +52,67 @@ class SubscriptionController extends ApiMutableModelControllerBase
         return $result;
     }
 
+    private function validateRequestedHwid(): ?array
+    {
+        $input = $this->request->getPost('subscription');
+        if (!is_array($input)) return null;
+        $value = (string)($input['hwid'] ?? '');
+        try {
+            if (trim($value) !== '') xray_subscription_hwid($value);
+        } catch (\InvalidArgumentException $e) {
+            return ['result' => 'failed', 'message' => $e->getMessage()];
+        }
+        return null;
+    }
+
+    /**
+     * Generate HWID when saving a new HTTPS source or refreshing a legacy
+     * source without one. Save it before the network request so retries,
+     * cron and manual refresh always present the same device to PasarGuard.
+     */
+    private function getOrCreateHwid(string $uuid): string
+    {
+        if (!self::validUuid($uuid)) {
+            throw new \InvalidArgumentException('Invalid subscription ID');
+        }
+        $config = Config::getInstance();
+        $config->lock();
+        try {
+            $node = $this->getModel()->getNodeByReference('subscription.' . $uuid);
+            if ($node === null) {
+                throw new \RuntimeException('Subscription no longer exists');
+            }
+            if ((string)$node->source_type !== 'url') return '';
+            $old = (string)($node->hwid ?? '');
+            $hwid = xray_subscription_hwid($old);
+            if ($old !== $hwid) {
+                $node->setNodes(['hwid' => $hwid]);
+                $this->save();
+            }
+            return $hwid;
+        } finally {
+            $config->unlock();
+        }
+    }
+
     public function addItemAction()
     {
-        return $this->addBase('subscription', 'subscription');
+        if ($error = $this->validateRequestedHwid()) return $error;
+        $result = $this->addBase('subscription', 'subscription');
+        if (($result['result'] ?? '') === 'saved' && !empty($result['uuid'])) {
+            $this->getOrCreateHwid((string)$result['uuid']);
+        }
+        return $result;
     }
 
     public function setItemAction($uuid)
     {
-        return $this->setBase('subscription', 'subscription', $uuid);
+        if ($error = $this->validateRequestedHwid()) return $error;
+        $result = $this->setBase('subscription', 'subscription', $uuid);
+        if (($result['result'] ?? '') === 'saved') {
+            $this->getOrCreateHwid((string)$uuid);
+        }
+        return $result;
     }
 
     public function toggleItemAction($uuid, $enabled = null)
@@ -108,6 +161,7 @@ class SubscriptionController extends ApiMutableModelControllerBase
         return [
             'source_type' => (string)$node->source_type,
             'url' => (string)$node->url,
+            'hwid' => (string)($node->hwid ?? ''),
             'links' => (string)$node->links,
             'outbounds' => (string)$node->outbounds,
         ];
@@ -138,9 +192,10 @@ class SubscriptionController extends ApiMutableModelControllerBase
         }
         try {
             $kind = trim((string)($source['source_type'] ?? 'url')) ?: 'url';
+            $hwid = $kind === 'url' ? $this->getOrCreateHwid((string)$uuid) : '';
             $outbounds = xray_subscription_import(
                 $kind, (string)($source['url'] ?? ''), (string)($source['links'] ?? ''),
-                [ImportController::class, 'parseVless']
+                [ImportController::class, 'parseVless'], $hwid
             );
             $json = json_encode($outbounds, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
             Config::getInstance()->lock();
