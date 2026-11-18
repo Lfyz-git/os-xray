@@ -13,7 +13,7 @@ define('T2S_BIN',           '/usr/local/libexec/os-xray/tun2socks');
 define('T2S_CONF_DIR',      '/usr/local/tun2socks');
 // BUG-7 FIX: stderr демонов в лог-файл вместо /dev/null
 define('XRAY_DAEMON_LOG',   '/var/log/xray-core.log'); // общий лог (fallback)
-define('XRAY_VERSION_FILE', '/usr/local/opnsense/mvc/app/models/OPNsense/Xray/version.txt');
+define('XRAY_VERSION_FILE', '/usr/local/opnsense/version/xray');
 
 function xray_valid_instance_uuid(string $uuid): bool
 {
@@ -658,7 +658,9 @@ switch ($action) {
         exit(0);
 
     case 'version':
-        $ver = file_exists(XRAY_VERSION_FILE) ? trim(file_get_contents(XRAY_VERSION_FILE)) : 'unknown';
+        $info = json_decode((string)@file_get_contents(XRAY_VERSION_FILE), true);
+        $ver = is_array($info) && is_string($info['product_version'] ?? null)
+            ? $info['product_version'] : 'unknown';
         echo json_encode(['version' => $ver]) . "\n";
         break;
 
