@@ -1,54 +1,61 @@
-# Native Xray-core package management (draft)
+# Native OPNsense package: os-xray 3.3.0 (pre-release)
 
-This is work toward the native `os-xray` package; it is **not** part of the
-script-installed v3.2.1 release. Do not deploy this branch on a running firewall.
+The standard native build is provided under `packaging/native/` and uses
+`opnsense/plugins/Mk/plugins.mk` to generate a genuine FreeBSD `.pkg`,
+including OPNsense plugin metadata, generated package hooks and dependencies.
 
-## Why
+## Packages
 
-The legacy installer pins Xray-core 26.3.27 and downloads the
-`Xray-freebsd-64.zip` GitHub Release archive to
-`/usr/local/bin/xray-core`. That is intentionally reproducible for the
-existing v3.2.1 release but unsuitable for native package updates.
+- **os-xray 3.3.0**: MVC/GUI, service actions, boot/cron integration, config
+  generator and subscription manager. No bundled Xray or tun2socks executable.
+- **xray-core**: regular OPNsense package (`security/xray-core`). The plugin
+  uses `/usr/local/bin/xray`; its version is independent of os-xray.
+- **xray-tun2socks 2.7.0**: separately packaged FreeBSD amd64 upstream binary,
+  downloaded with pinned SHA-256 and installed under
+  `/usr/local/libexec/os-xray/tun2socks`, never on top of an official package.
+- **php84-curl**: normal OPNsense package needed by HTTPS subscriptions.
 
-For OPNsense 26.7, `opnsense/tools/config/26.7/ports.conf` includes
-`security/xray-core` in the distribution ports set. The FreeBSD port
-installs its binary at `/usr/local/bin/xray`. The current presence of an
-installable package should be verified on OPNsense-Lab before release:
+The native plugin depends on the three other packages. A future private
+repository will carry `os-xray` and `xray-tun2socks`; the official OPNsense
+repository provides `xray-core` and `php84-curl`.
+
+## Build
+
+The `Build native OPNsense packages` GitHub Actions workflow uses an isolated
+FreeBSD 15.1 amd64 VM and the upstream OPNsense plugin build system.
+On a FreeBSD build host, with `opnsense/plugins` checked out at
+`./opnsense-plugins` and build dependencies installed:
 
 ```sh
 clear
-pkg rquery -r OPNsense '%n %v %R' xray-core
-pkg info xray-core
+sh packaging/native/build.sh
 ```
 
-The native os-xray package must depend on the OPNsense-managed
-`xray-core` package; it must **not** bundle or overwrite its executable.
-Core releases and os-xray plugin releases are independent. `net/tun2socks`
-is currently not included in the OPNsense 26.7 ports build list and needs
-an independently managed package/source decision.
+Output in `dist/`: `os-xray-3.3.0.pkg` and
+`xray-tun2socks-2.7.0.pkg`. No installation on a running OPNsense system
+takes place during CI. The generated plugin package includes normal OPNsense
+post-install integration hooks, without running the old installer or Apply.
 
-## Core updates from the plugin GUI
+## Scope and installation policy
 
-The Advanced tab can query the installed and repository versions, refresh the
-official OPNsense catalog on request, and explicitly upgrade only `xray-core`
-through `pkg upgrade -r OPNsense xray-core`.
+- **Clean installation only**, with `pkg` and matching OPNsense repositories.
+- Only **pkg-to-pkg upgrades** will be supported. No scripts, tests, adapters
+  or compatibility paths for `install.sh` or `upgrade.sh`.
+- The old v3.2.1 release is independent and remains script-installed; its
+  pinned binaries are not modified by this branch.
+- The first device test must use a **clean OPNsense-Lab**, not Styx.
+- A signed private package repository and automatic firmware-GUI update path
+  are separate publication steps; these CI artifacts are *not yet a repo*.
 
-Safeguards: the update action requires the core to be owned by `pkg`,
-serializes updates, validates all applied configs before changing binaries,
-records running instances, stops only those instances and validates the updated
-core before restarting only previously running instances. Explicitly stopped
-profiles remain stopped. This intentionally interrupts VPN sessions. An
-unmanaged running process blocks the upgrade. If package upgrade or
-post-update validation fails, tunnels remain stopped for manual intervention.
-Automatic core downgrade/rollback is **not** implemented.
+## Updating the core from the GUI
 
-The backend must be exercised on OPNsense-Lab with actual pkg metadata and
-a noncritical instance before this feature is merged or used on Styx.
+Advanced shows installed and repository versions and offers explicit checks
+and Xray-core upgrades through `pkg`. On confirmation, the updater records
+which managed tunnels are running, stops those tunnels, upgrades only
+`xray-core`, validates the applied JSON with the new binary and restarts only
+previously running tunnels. Expect a brief interruption. An unmanaged process
+blocks the update. Failures leave instances stopped for manual diagnosis.
 
-## Out of scope
-
-- Any migration from `install.sh` / `upgrade.sh` to `pkg`.
-- Historical configuration schema migrations or support for script-installed cores.
-- An embedded downloader for arbitrary upstream GitHub Release binaries.
-- Automatic core updates without an explicit administrative action.
-- Automatic package downgrade after an unsuccessful update.
+The update orchestration, cross-process locks and error handling still need
+functional verification on OPNsense-Lab after the native package build.
+There is no automatic core rollback or unattended upgrade.

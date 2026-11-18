@@ -7,9 +7,9 @@ require_once __DIR__ . '/xray-config.php';
 require_once __DIR__ . '/xray-apply.php';
 
 // ─── Shared constants (not per-instance) ─────────────────────────────────────
-define('XRAY_BIN',          '/usr/local/bin/xray-core');
+define('XRAY_BIN',          '/usr/local/bin/xray');
 define('XRAY_CONF_DIR',     '/usr/local/etc/xray-core');
-define('T2S_BIN',           '/usr/local/tun2socks/tun2socks');
+define('T2S_BIN',           '/usr/local/libexec/os-xray/tun2socks');
 define('T2S_CONF_DIR',      '/usr/local/tun2socks');
 // BUG-7 FIX: stderr демонов в лог-файл вместо /dev/null
 define('XRAY_DAEMON_LOG',   '/var/log/xray-core.log'); // общий лог (fallback)

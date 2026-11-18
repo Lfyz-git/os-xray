@@ -62,7 +62,7 @@ function xray_subscription_validate_candidate(array $sources, $instance): void
         }
     }
     $candidate = xray_build_config($candidateSettings);
-    $bin = '/usr/local/bin/xray-core';
+    $bin = '/usr/local/bin/xray';
     if (!is_executable($bin)) {
         throw new RuntimeException('Xray binary is unavailable');
     }

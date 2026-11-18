@@ -1,0 +1,43 @@
+name: Build native OPNsense packages
+
+on:
+  push:
+    branches:
+      - 'feature/native-*'
+    paths:
+      - 'plugin/**'
+      - 'packaging/**'
+      - '.github/workflows/native-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-pkg:
+    name: FreeBSD 15.1 amd64 package build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: opnsense/plugins
+          ref: master
+          path: opnsense-plugins
+      - name: Build native pkgs in FreeBSD VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '15.1'
+          usesh: true
+          prepare: |
+            pkg install -y ca_root_nss unzip php84 php84-curl xray-core
+          run: |
+            set -eu
+            sh packaging/native/build.sh
+      - name: Save native package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: os-xray-freebsd15-amd64
+          path: dist/*.pkg
+          if-no-files-found: error

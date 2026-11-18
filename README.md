@@ -69,6 +69,12 @@ Firewall Rules (selective routing)
 
 > **Version policy:** the installer pins the tested Xray-core 26.3.27 and tun2socks 2.7.0 binaries. Updating these binaries is separate from releasing the OPNsense plugin.
 
+
+> **Native package work (draft):** `os-xray 3.3.0` is being packaged as
+> an OPNsense `.pkg` with separately managed `xray-core` and `xray-tun2socks`.
+> This is not the published v3.2.1 script release. Build instructions:
+> [Native package](docs/native-core-package.md). No script-to-pkg migration is provided.
+
 ## Installation
 
 **Option 1 — via git clone (recommended)**

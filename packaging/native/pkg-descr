@@ -1,0 +1,6 @@
+Xray-core client integration for OPNsense: multiple independent TUN instances,
+subscriptions with stable HWID, routing rules and LeastLoad balancing.
+
+Uses the OPNsense-managed xray-core package and a separate, private
+xray-tun2socks dependency package. No binaries are bundled in os-xray.
+Not part of the official OPNsense plugin collection.
