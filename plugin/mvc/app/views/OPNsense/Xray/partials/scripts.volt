@@ -456,6 +456,52 @@
             loadLog("/api/xray/service/xraylog", 'logCoreContent', 'logCoreRefreshBtn');
         });
 
+        // ── Native Xray-core package management ─────────────────────
+        var corePkgState = null;
+        var corePkgBusy = false;
+        function showCorePackage(data) {
+            corePkgState = data || {};
+            var ok = corePkgState.result === 'ok';
+            $('#xrayCorePackageInstalled').text(corePkgState.installed || '—');
+            $('#xrayCorePackageAvailable').text(corePkgState.available || '—');
+            $('#xrayCorePackageRepository').text(corePkgState.repository || 'OPNsense');
+            $('#xrayCorePackageMessage')
+                .toggleClass('text-danger', !ok)
+                .text(corePkgState.message || (corePkgState.running
+                    ? 'Stop all instances to update the core.'
+                    : (corePkgState.update_available ? 'Core update available.' : (ok ? 'No update available.' : 'Unavailable.'))));
+            $('#xrayCorePackageUpgrade').prop('disabled',
+                corePkgBusy || !ok || !corePkgState.update_available || !!corePkgState.running);
+        }
+        function corePackageRequest(url, method) {
+            corePkgBusy = true;
+            $('#xrayCorePackageCheck,#xrayCorePackageUpgrade').prop('disabled', true);
+            $('#xrayCorePackageMessage').removeClass('text-danger').text('Working…');
+            return $.ajax({ url: url, method: method, dataType: 'json', timeout: 300000 })
+                .done(showCorePackage)
+                .fail(function (xhr) {
+                    showCorePackage({result: 'error', message: 'Core package request failed: HTTP ' + xhr.status});
+                })
+                .always(function () {
+                    corePkgBusy = false;
+                    $('#xrayCorePackageCheck').prop('disabled', false);
+                    if (corePkgState) showCorePackage(corePkgState);
+                });
+        }
+        $('a[href="#advanced"]').on('shown.bs.tab', function () {
+            if (!corePkgState && !corePkgBusy) {
+                corePackageRequest('/api/xray/service/corepackage', 'GET');
+            }
+        });
+        $('#xrayCorePackageCheck').on('click', function () {
+            corePackageRequest('/api/xray/service/corepackagecheck', 'POST');
+        });
+        $('#xrayCorePackageUpgrade').on('click', function () {
+            if (!corePkgState || corePkgState.running || !corePkgState.update_available) return;
+            if (!confirm('Update Xray-core from the OPNsense package repository? All instances must already be stopped. No automatic restart or Apply will be performed.')) return;
+            corePackageRequest('/api/xray/service/corepackageupgrade', 'POST');
+        });
+
         // ── Copy Debug Info ─────────────────────────────────────────
         $('#btnCopyDebug').click(function () {
             var $btn = $(this).prop('disabled', true);
