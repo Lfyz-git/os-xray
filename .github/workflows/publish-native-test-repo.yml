@@ -74,13 +74,25 @@ jobs:
               trap 'rm -f /tmp/os-xray-ci-private.key' EXIT
             fi
             sh infrastructure/packaging/repository/build-signed-site.sh source/dist site
+      - name: Pack signed repository for inspection
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The real FreeBSD ABI directory contains colons (FreeBSD:15:amd64).
+          # upload-artifact rejects such paths, so wrap the entire site in a tarball.
+          tar -czf os-xray-test-signed-repo.tar.gz -C site .
+          test -s os-xray-test-signed-repo.tar.gz
+          tar -tzf os-xray-test-signed-repo.tar.gz > repo-tar-contents.txt
+          grep -Fxq './FreeBSD:15:amd64/26.7/test/repo/os-xray-3.3.0.pkg' repo-tar-contents.txt
+          grep -Fxq './FreeBSD:15:amd64/26.7/test/repo/xray-tun2socks-2.7.0.pkg' repo-tar-contents.txt
+          grep -Fxq './Keys/repo.pub' repo-tar-contents.txt
       - name: Preserve signed packages for inspection
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: os-xray-test-signed-freebsd15-amd64
-          path: site/
-          include-hidden-files: true
+          path: os-xray-test-signed-repo.tar.gz
           if-no-files-found: error
           retention-days: 30
       - name: Upload Pages site
