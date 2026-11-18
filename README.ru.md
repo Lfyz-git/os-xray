@@ -8,7 +8,7 @@
 [![OPNsense](https://img.shields.io/badge/OPNsense-26.7.x-blue)](https://opnsense.org)
 [![FreeBSD](https://img.shields.io/badge/FreeBSD-15.1%20amd64-red)](https://freebsd.org)
 
-**Xray-core VPN plugin for OPNsense** — самостоятельный форк Lfyz-git v3.2.0
+**Xray-core VPN plugin for OPNsense** — самостоятельный форк Lfyz-git v3.2.1
 
 Xray-core + tun2socks — VPN-клиент для OPNsense с подписками, ручным выбором нод, балансировкой LeastLoad и редактируемыми правилами Routing.
 
@@ -74,7 +74,7 @@ Firewall Rules (селективная маршрутизация)
 
 ```sh
 cd /tmp
-git clone --branch v3.2.0 https://github.com/Lfyz-git/os-xray.git
+git clone --branch v3.2.1 https://github.com/Lfyz-git/os-xray.git
 cd os-xray
 sh install.sh
 ```
@@ -82,10 +82,10 @@ sh install.sh
 **Вариант 2 — через архив**
 
 ```sh
-fetch -o /tmp/os-xray-v3.2.0.tar.gz https://github.com/Lfyz-git/os-xray/archive/refs/tags/v3.2.0.tar.gz
-mkdir -p /tmp/os-xray-v3.2.0
-tar -xzf /tmp/os-xray-v3.2.0.tar.gz -C /tmp/os-xray-v3.2.0 --strip-components 1
-cd /tmp/os-xray-v3.2.0 && sh install.sh
+fetch -o /tmp/os-xray-v3.2.1.tar.gz https://github.com/Lfyz-git/os-xray/archive/refs/tags/v3.2.1.tar.gz
+mkdir -p /tmp/os-xray-v3.2.1
+tar -xzf /tmp/os-xray-v3.2.1.tar.gz -C /tmp/os-xray-v3.2.1 --strip-components 1
+cd /tmp/os-xray-v3.2.1 && sh install.sh
 ```
 
 Установщик автоматически:
@@ -115,8 +115,8 @@ configctl xray version
 
 ```sh
 cd /root
-git clone --branch v3.2.0 https://github.com/Lfyz-git/os-xray.git os-xray-v3.2.0
-cd os-xray-v3.2.0
+git clone --branch v3.2.1 https://github.com/Lfyz-git/os-xray.git os-xray-v3.2.1
+cd os-xray-v3.2.1
 git rev-parse HEAD              # проверить коммит релиза
 sh upgrade.sh
 configctl xray statusall
