@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: os-xray-test-pages
@@ -51,48 +50,11 @@ jobs:
           ref: feature/native-core-package-ui
           path: source
       - name: Checkout OPNsense plugin build system
-        if: github.event_name != 'workflow_dispatch'
         uses: actions/checkout@v4
         with:
           repository: opnsense/plugins
           ref: master
           path: source/opnsense-plugins
-      # Reuse a successful, immutable native package build rather than
-      # rebuilding on every publish (which depends on FreeBSD pkg mirrors).
-      - name: Select verified native package build
-        if: github.event_name == 'workflow_dispatch'
-        id: native
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          SOURCE_SHA=$(git -C source rev-parse HEAD)
-          RUNS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs" --method GET \
-            -f head_sha="$SOURCE_SHA" -f per_page=100)
-          RUN_ID=$(jq -r --arg sha "$SOURCE_SHA" \
-            '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "feature/native-core-package-ui" and .name == "Build native OPNsense packages" and .conclusion == "success")] | first | .id // empty' <<< "$RUNS")
-          if [[ -z "$RUN_ID" ]]; then
-            echo "::error::No successful native-package.yml build found for source commit $SOURCE_SHA. Run the native package workflow first."
-            exit 1
-          fi
-          echo "Selected verified native package build: $RUN_ID ($SOURCE_SHA)"
-          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-      - name: Download verified native packages
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/download-artifact@v4
-        with:
-          name: os-xray-freebsd15-amd64
-          path: source/dist
-          run-id: ${{ steps.native.outputs.run_id }}
-          github-token: ${{ github.token }}
-      - name: Check downloaded package filenames
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s source/dist/os-xray-3.3.0.pkg
-          test -s source/dist/xray-tun2socks-2.7.0.pkg
       - name: Build packages and sign repository in FreeBSD 15.1
         env:
           OS_XRAY_REPO_KEY_B64: ${{ github.event_name == 'workflow_dispatch' && secrets.OS_XRAY_REPO_KEY_B64 || '' }}
@@ -100,13 +62,42 @@ jobs:
         with:
           release: '15.1'
           envs: OS_XRAY_REPO_KEY_B64 GITHUB_EVENT_NAME
-          # Package dependencies are only needed for the ephemeral push smoke build.
-          # Publishing reuses a verified package artifact and needs only base pkg/openssl.
-          prepare: ${{ github.event_name != 'workflow_dispatch' && 'pkg install -y ca_root_nss unzip php85 php85-curl xray-core' || '' }}
+          # Fail closed: NEVER publish from cached pkg metadata or old workflow artifacts.
+          # A live official FreeBSD pkg catalogue and fresh downloads are required.
+          prepare: |
+            set -eu
+            pkg clean -ay
+            # Only in the disposable FreeBSD build VM: remove old repo databases.
+            # A failed update must not leave a previously downloaded catalogue usable.
+            rm -f /var/db/pkg/repo-*.sqlite
+            echo 'Refreshing official FreeBSD package catalogues (no cached fallback)...'
+            timeout 240 pkg -o FETCH_RETRY=1 -o FETCH_TIMEOUT=20 update -f || {
+              echo 'Official FreeBSD package catalogue unavailable; refusing to publish.' >&2
+              exit 1
+            }
+            echo 'Installing dependencies from freshly refreshed package catalogues...'
+            timeout 300 pkg -o FETCH_RETRY=1 -o FETCH_TIMEOUT=20 install -y -U ca_root_nss unzip php85 php85-curl xray-core || {
+              echo 'Fresh FreeBSD dependencies unavailable; refusing to publish.' >&2
+              exit 1
+            }
+            # Reject an already-installed version that differs from the just
+            # refreshed official catalogue (e.g. a preloaded VM image).
+            for name in xray-core php85-curl; do
+              available=$(pkg rquery -U -r FreeBSD-ports '%v' "$name")
+              installed=$(pkg query '%v' "$name")
+              if [ -z "$available" ] || [ "$available" != "$installed" ]; then
+                echo "Dependency $name does not match the fresh official catalogue; refusing to publish." >&2
+                exit 1
+              fi
+              echo "Fresh dependency verified: $name $installed"
+            done
           run: |
             set -eu
+            # Always rebuild packages in this VM. Stale artifacts and cached
+            # output from prior jobs must never be copied into a publication.
+            rm -rf source/dist /tmp/os-xray-native-build
+            sh source/packaging/native/build.sh
             if [ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" ]; then
-              sh source/packaging/native/build.sh
               # Disposable signing key verifies the pipeline, never published.
               umask 077
               openssl genrsa -out /tmp/os-xray-ci-private.key 3072

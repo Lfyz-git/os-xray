@@ -34,6 +34,23 @@ jobs:
               new Function(src.replace(/^<script>\s*|\s*<\/script>\s*$/g, ''));
           }
           NODE
+      - name: Guard fail-closed fresh package publication
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          workflow = Path('.github/workflows/publish-native-test-repo.yml').read_text()
+          required = (
+              'pkg clean -ay',
+              'rm -f /var/db/pkg/repo-*.sqlite',
+              'update -f',
+              'install -y -U',
+              "pkg rquery -U -r FreeBSD-ports",
+              'rm -rf source/dist /tmp/os-xray-native-build',
+              'sh source/packaging/native/build.sh',
+          )
+          assert all(item in workflow for item in required), "Publication must use fresh official dependencies and rebuild"
+          assert 'actions/download-artifact@' not in workflow, "Never publish old CI artifacts"
+          PY
       - name: Existing lifecycle safety regressions
         run: |
           python3 tests/behavioral_stop_test.py

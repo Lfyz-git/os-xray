@@ -50,6 +50,23 @@ The resulting public URL is:
 The site is only available after GitHub Pages is enabled and the
 manual publish workflow finishes successfully.
 
+### Freshness / failure policy
+
+Each manual publication **rebuilds** both private packages in a disposable
+FreeBSD VM. Before building, CI clears cached package files and repository
+databases, force-refreshes the official FreeBSD package catalogues, and fetches
+current dependencies. Installed `xray-core` and `php85-curl` versions must
+match the newly fetched FreeBSD catalogue; a failed refresh, missing package,
+version mismatch, or download error **aborts publication**. There is no
+fallback to previous GitHub Actions build artifacts, stale metadata, or local
+package caches. Download timeouts keep a broken mirror from hanging for long.
+
+This verifies the **FreeBSD build-time** dependency metadata, not the
+availability of OPNsense's own firmware repository. The official OPNsense
+dependency resolution must also be checked when installing on OPNsense-Lab.
+The intentionally pinned, checksum-verified `tun2socks` 2.7.0 source is
+separate from the no-stale-cache rule.
+
 ## On a freshly installed OPNsense-Lab only
 
 This is **not** a migration from the old `install.sh` installation.
