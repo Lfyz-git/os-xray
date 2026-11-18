@@ -1,7 +1,14 @@
 name: Publish signed os-xray test repository
 
-# Manual only: never publish an untested plugin automatically.
+# Push runs only an isolated signature/catalogue smoke check.
+# Deployment is manual; an ordinary push never publishes anything.
 on:
+  push:
+    branches:
+      - feature/native-pkg-test-repository
+    paths:
+      - 'packaging/repository/**'
+      - '.github/workflows/publish-native-test-repo.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,16 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
-      OS_XRAY_REPO_KEY_B64: ${{ secrets.OS_XRAY_REPO_KEY_B64 }}
+      OS_XRAY_REPO_KEY_B64: ${{ github.event_name == 'workflow_dispatch' && secrets.OS_XRAY_REPO_KEY_B64 || '' }}
     steps:
-      - name: Require package signing key
+      - name: Require key for public publishing only
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           test -n "$OS_XRAY_REPO_KEY_B64" || { echo "Missing OS_XRAY_REPO_KEY_B64 secret"; exit 1; }
       - name: Checkout repository infrastructure
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || 'feature/native-pkg-test-repository' }}
           path: infrastructure
       - name: Checkout native package draft
         uses: actions/checkout@v4
@@ -43,14 +51,23 @@ jobs:
         uses: vmactions/freebsd-vm@v1
         with:
           release: '15.1'
-          envs: OS_XRAY_REPO_KEY_B64
+          envs: OS_XRAY_REPO_KEY_B64 GITHUB_EVENT_NAME
           prepare: |
             pkg install -y ca_root_nss unzip php85 php85-curl xray-core
           run: |
             set -eu
             sh source/packaging/native/build.sh
+            if [ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" ]; then
+              # Disposable signing key verifies the pipeline, never published.
+              umask 077
+              openssl genrsa -out /tmp/os-xray-ci-private.key 3072
+              OS_XRAY_REPO_KEY_B64=$(openssl base64 -A -in /tmp/os-xray-ci-private.key)
+              export OS_XRAY_REPO_KEY_B64
+              trap 'rm -f /tmp/os-xray-ci-private.key' EXIT
+            fi
             sh infrastructure/packaging/repository/build-signed-site.sh source/dist site
       - name: Preserve signed packages for inspection
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: os-xray-test-signed-freebsd15-amd64
@@ -59,11 +76,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Upload Pages site
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@v4
         with:
           path: site/
 
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     name: Deploy signed repository to GitHub Pages
     needs: build-and-sign
     runs-on: ubuntu-latest
