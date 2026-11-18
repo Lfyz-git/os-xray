@@ -42,6 +42,37 @@ function core_pkg_running(): bool
     return false;
 }
 
+/**
+ * Capture the exact set of running managed instances. Other process ownership
+ * is checked separately; an unrecognized Xray process blocks the upgrade.
+ */
+function core_pkg_running_instances(): ?array
+{
+    [$status, $json] = core_pkg_exec(['/usr/local/sbin/configctl', '-d', 'xray', 'statusall']);
+    $instances = json_decode($json, true);
+    if ($status !== 0 || !is_array($instances)) {
+        return null;
+    }
+    $running = [];
+    foreach ($instances as $uuid => $info) {
+        if (!is_string($uuid) || !is_array($info) ||
+            !preg_match('/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iD', $uuid)) {
+            return null;
+        }
+        if (($info['xray_core'] ?? '') === 'running' ||
+            ($info['tun2socks'] ?? '') === 'running') {
+            $running[] = $uuid;
+        }
+    }
+    return $running;
+}
+
+function core_pkg_control(string $action, string $uuid): bool
+{
+    [$status, $output] = core_pkg_exec(['/usr/local/sbin/configctl', '-d', 'xray', $action, $uuid]);
+    return $status === 0 && !preg_match('/\\b(?:ERROR|failed)\\b/i', $output);
+}
+
 function core_pkg_safe_version(string $value): ?string
 {
     $value = trim($value);
@@ -95,9 +126,6 @@ if ($operation !== 'status') {
 }
 
 if ($operation === 'check' || $operation === 'upgrade') {
-    if ($operation === 'upgrade' && core_pkg_running()) {
-        core_pkg_reply(['result' => 'blocked', 'message' => 'Stop all Xray and tun2socks instances before updating the core']);
-    }
     [$status] = core_pkg_exec([$pkg, 'update', '-q', '-r', 'OPNsense']);
     if ($status !== 0) {
         core_pkg_reply(['result' => 'error', 'message' => 'Unable to update OPNsense package catalog']);
@@ -111,29 +139,66 @@ if ($operation !== 'upgrade' || $state['result'] !== 'ok') {
 if (!$state['update_available']) {
     core_pkg_reply(['result' => 'ok', 'message' => 'Xray-core is already up to date'] + $state);
 }
-if ($state['running'] || core_pkg_running()) {
-    core_pkg_reply(['result' => 'blocked', 'message' => 'Xray or tun2socks is still running']);
-}
 
-// Before updating, reject bad applied configurations. No Apply or auto restart.
+// Validate before interrupting existing connections.
 $configs = glob('/usr/local/etc/xray-core/config-*.json') ?: [];
 foreach ($configs as $file) {
     [$testStatus] = core_pkg_exec(['/usr/local/bin/xray', 'run', '-test', '-c', $file]);
     if ($testStatus !== 0) {
-        core_pkg_reply(['result' => 'error', 'message' => 'Existing applied configuration failed validation; no update attempted']);
+        core_pkg_reply(['result' => 'error', 'message' => 'Existing applied configuration failed validation; nothing stopped']);
     }
+}
+$restart = core_pkg_running_instances();
+if ($restart === null) {
+    core_pkg_reply(['result' => 'error', 'message' => 'Cannot identify managed instances; no tunnels stopped']);
+}
+if (core_pkg_running() && count($restart) === 0) {
+    core_pkg_reply(['result' => 'blocked', 'message' => 'An unmanaged Xray or tun2socks process is running']);
+}
+
+// Controlled downtime: stop the running instances only. Explicitly stopped
+// profiles are not restarted. Administrative stop flags disable watchdog.
+$stopped = [];
+foreach ($restart as $uuid) {
+    if (!core_pkg_control('stop', $uuid)) {
+        // No package changes have occurred. Restore already-stopped profiles.
+        foreach ($stopped as $id) {
+            core_pkg_control('start', $id);
+        }
+        core_pkg_reply(['result' => 'error', 'message' => 'Could not safely stop all running instances; upgrade cancelled']);
+    }
+    $stopped[] = $uuid;
+}
+if (core_pkg_running()) {
+    foreach ($stopped as $id) {
+        core_pkg_control('start', $id);
+    }
+    core_pkg_reply(['result' => 'blocked', 'message' => 'Xray or tun2socks is still running; no package update attempted']);
 }
 
 [$upgradeStatus] = core_pkg_exec([$pkg, 'upgrade', '-y', '-r', 'OPNsense', 'xray-core']);
 if ($upgradeStatus !== 0 || !is_executable('/usr/local/bin/xray')) {
-    core_pkg_reply(['result' => 'error', 'message' => 'Package upgrade failed; inspect the pkg logs before starting Xray']);
+    core_pkg_reply(['result' => 'error', 'message' => 'Package upgrade failed; tunnels remain stopped for manual recovery']);
 }
 foreach ($configs as $file) {
     [$testStatus] = core_pkg_exec(['/usr/local/bin/xray', 'run', '-test', '-c', $file]);
     if ($testStatus !== 0) {
-        core_pkg_reply(['result' => 'error', 'message' => 'New Xray-core failed configuration validation; instances remain stopped']);
+        core_pkg_reply(['result' => 'error', 'message' => 'New Xray-core failed configuration validation; tunnels remain stopped']);
+    }
+}
+// Restart only instances that were running before the upgrade.
+$failedStarts = [];
+foreach ($stopped as $uuid) {
+    if (!core_pkg_control('start', $uuid)) {
+        $failedStarts[] = $uuid;
     }
 }
 $updated = core_pkg_state($pkg);
-$updated['message'] = 'Xray-core package updated. Instances were not restarted; start them explicitly after checking.';
+if ($failedStarts) {
+    $updated['result'] = 'error';
+    $updated['message'] = 'Core updated, but some previously running tunnels could not restart. Inspect Xray status and logs.';
+} else {
+    $updated['message'] = 'Core updated and previously running tunnels restarted. Stopped profiles remain stopped.';
+}
+$updated['restarted'] = count($stopped) - count($failedStarts);
 core_pkg_reply($updated);
