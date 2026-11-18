@@ -128,17 +128,22 @@ function xray_subscription_hwid(string $value): string
     return $value;
 }
 
+/** OPNsense stores its product version in a JSON metadata file, not as plain text. */
+function xray_subscription_os_version(string $metadata): string
+{
+    $info = json_decode($metadata, true);
+    $version = is_array($info) ? ($info['product_version'] ?? null) : null;
+    return is_string($version) && preg_match('/^[A-Za-z0-9._-]{1,32}$/D', $version)
+        ? $version : 'unknown';
+}
+
 /** Identifying headers are identical for manual and scheduled refresh. */
 function xray_subscription_headers(string $hwid, string $version = '3.2.1'): array
 {
     if ($hwid === '') throw new InvalidArgumentException('HTTPS subscription HWID is missing');
     $hwid = xray_subscription_hwid($hwid);
-    $osVersion = 'unknown';
-    $versionFile = '/usr/local/opnsense/version/core';
-    if (is_readable($versionFile)) {
-        $read = trim((string)@file_get_contents($versionFile));
-        if (preg_match('/^[A-Za-z0-9._-]{1,32}$/D', $read)) $osVersion = $read;
-    }
+    $metadata = @file_get_contents('/usr/local/opnsense/version/core');
+    $osVersion = xray_subscription_os_version(is_string($metadata) ? $metadata : '');
     return [
         'User-Agent: os-xray/' . $version,
         'X-HWID: ' . $hwid,
