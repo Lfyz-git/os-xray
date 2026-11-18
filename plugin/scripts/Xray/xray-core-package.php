@@ -48,7 +48,7 @@ function core_pkg_running(): bool
  */
 function core_pkg_running_instances(): ?array
 {
-    [$status, $json] = core_pkg_exec(['/usr/local/sbin/configctl', '-d', 'xray', 'statusall']);
+    [$status, $json] = core_pkg_exec(['/usr/local/sbin/configctl', 'xray', 'statusall']);
     $instances = json_decode($json, true);
     if ($status !== 0 || !is_array($instances)) {
         return null;
@@ -69,7 +69,7 @@ function core_pkg_running_instances(): ?array
 
 function core_pkg_control(string $action, string $uuid): bool
 {
-    [$status, $output] = core_pkg_exec(['/usr/local/sbin/configctl', '-d', 'xray', $action, $uuid]);
+    [$status, $output] = core_pkg_exec(['/usr/local/sbin/configctl', 'xray', $action, $uuid]);
     return $status === 0 && !preg_match('/\\b(?:ERROR|failed)\\b/i', $output);
 }
 
