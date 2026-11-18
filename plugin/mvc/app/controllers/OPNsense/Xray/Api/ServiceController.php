@@ -222,6 +222,48 @@ class ServiceController extends ApiMutableServiceControllerBase
     }
 
     /**
+     * GET /api/xray/service/corePackage
+     * Display package-managed Xray-core versions; no network operation.
+     */
+    public function corePackageAction()
+    {
+        return $this->corePackageRun('xray corepkg');
+    }
+
+    /**
+     * POST /api/xray/service/corePackageCheck
+     * Explicitly refresh the official OPNsense repository catalog.
+     */
+    public function corePackageCheckAction()
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'error', 'message' => 'POST required'];
+        }
+        return $this->corePackageRun('xray corepkgcheck', 180);
+    }
+
+    /**
+     * POST /api/xray/service/corePackageUpgrade
+     * This does not auto-stop or restart VPN instances.
+     */
+    public function corePackageUpgradeAction()
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'error', 'message' => 'POST required'];
+        }
+        return $this->corePackageRun('xray corepkgupgrade', 300);
+    }
+
+    private function corePackageRun(string $action, int $timeout = 60): array
+    {
+        $response = (new Backend())->configdRun($action, false, $timeout);
+        $decoded = json_decode(trim((string)$response), true);
+        return is_array($decoded) && isset($decoded['result'])
+            ? $decoded
+            : ['result' => 'error', 'message' => 'Xray-core package backend did not return valid status'];
+    }
+
+    /**
      * E4: GET /api/xray/service/diagnostics[/{uuid}]
      */
     public function diagnosticsAction($uuid = '')
