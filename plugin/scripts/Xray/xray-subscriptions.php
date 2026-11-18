@@ -113,84 +113,153 @@ function xray_subscription_node_summaries(array $outbounds): array
 }
 
 /**
- * Read HTTPS subscription content without PHP allow_url_fopen.
- * Only HTTPS URLs are accepted; do not log raw fetch output containing tokens.
+ * Each HTTPS source has a stable, random identifier; it is not derived from
+ * hardware addresses, MAC addresses, or other machine-specific properties.
  */
-function xray_subscription_download(string $url): string
+function xray_subscription_hwid(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') return bin2hex(random_bytes(16));
+    // Deliberately stricter than the provider's 256-char maximum: header-safe
+    // ASCII identifiers are portable and cannot inject another HTTP header.
+    if (!preg_match('/^[A-Za-z0-9._:-]{1,128}$/D', $value)) {
+        throw new InvalidArgumentException('HWID must contain 1-128 letters, digits, dots, underscores, colons or dashes');
+    }
+    return $value;
+}
+
+/** Identifying headers are identical for manual and scheduled refresh. */
+function xray_subscription_headers(string $hwid, string $version = '3.2.1'): array
+{
+    if ($hwid === '') throw new InvalidArgumentException('HTTPS subscription HWID is missing');
+    $hwid = xray_subscription_hwid($hwid);
+    $osVersion = 'unknown';
+    $versionFile = '/usr/local/opnsense/version/core';
+    if (is_readable($versionFile)) {
+        $read = trim((string)@file_get_contents($versionFile));
+        if (preg_match('/^[A-Za-z0-9._-]{1,32}$/D', $read)) $osVersion = $read;
+    }
+    return [
+        'User-Agent: os-xray/' . $version,
+        'X-HWID: ' . $hwid,
+        'X-Device-OS: OPNsense',
+        'X-Ver-OS: ' . $osVersion,
+        'X-Device-Model: OPNsense Firewall',
+        'Accept: text/plain, application/json',
+    ];
+}
+
+/**
+ * Validate every DNS result before choosing a public endpoint. The caller
+ * must pin this address with CURLOPT_RESOLVE, so a second DNS lookup cannot
+ * substitute a private or loopback host after validation.
+ */
+function xray_subscription_public_ip(array $records): string
+{
+    $addresses = [];
+    foreach ($records as $record) {
+        $address = $record['ip'] ?? $record['ipv6'] ?? null;
+        if (!is_string($address) || !filter_var(
+            $address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        )) {
+            throw new InvalidArgumentException('Subscription host resolves to an invalid or private address');
+        }
+        $addresses[] = $address;
+    }
+    if (!$addresses) throw new RuntimeException('Subscription host could not be resolved');
+    // Prefer IPv4 when available; IPv6 remains supported if no A record exists.
+    foreach ($addresses as $address) {
+        if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) return $address;
+    }
+    return $addresses[0];
+}
+
+/**
+ * Download HTTPS subscriptions via the OPNsense core PHP cURL extension.
+ * TLS verification, SSRF protections, DNS pinning, timeout, redirect refusal
+ * and a strict response-size cap are mandatory; do not log tokenized URLs.
+ */
+function xray_subscription_download(string $url, string $hwid): string
 {
     $parts = parse_url($url);
     $host = is_array($parts) ? ($parts['host'] ?? '') : '';
     if (!is_array($parts) || ($parts['scheme'] ?? '') !== 'https'
         || !is_string($host) || !preg_match('/^[A-Za-z0-9.-]{1,253}$/D', $host)
-        || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
-        throw new \InvalidArgumentException('Subscription URL must be HTTPS without credentials or fragment');
-    }
-    // Block literal and DNS-resolved private/reserved addresses.
-    $records = dns_get_record($host, DNS_A | DNS_AAAA);
-    if (empty($records)) {
-        throw new \RuntimeException('Subscription host could not be resolved');
-    }
-    foreach ($records as $record) {
-        $address = $record['ip'] ?? $record['ipv6'] ?? null;
-        if ($address !== null && !filter_var(
-            $address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
-        )) {
-            throw new \InvalidArgumentException('Subscription host resolves to a private or reserved address');
-        }
-    }
-    // OPNsense's WebGui php.ini deliberately disables allow_url_fopen.
-    // Use the system HTTPS fetch utility instead of fopen(https://...).
-    // Keep TLS verification enabled and disable automatic 302 redirects.
-    $temp = tempnam(sys_get_temp_dir(), 'xray-sub-');
-    if ($temp === false || !chmod($temp, 0600)) {
-        throw new \RuntimeException('Cannot create private subscription download file');
+        || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])
+        || !function_exists('curl_init')) {
+        throw new InvalidArgumentException('Subscription URL requires HTTPS, a valid hostname and PHP cURL');
     }
 
+    $port = $parts['port'] ?? 443;
+    if (!is_int($port) || $port < 1 || $port > 65535) {
+        throw new InvalidArgumentException('Invalid HTTPS subscription port');
+    }
+    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+    if (!is_array($records)) throw new RuntimeException('Subscription host could not be resolved');
+    $ip = xray_subscription_public_ip($records);
+    $pinned = str_contains($ip, ':') ? '[' . $ip . ']' : $ip;
+
+    $headers = xray_subscription_headers($hwid);
+    $curl = curl_init($url);
+    if ($curl === false) throw new RuntimeException('Cannot initialize HTTPS subscription download');
+    $body = '';
+    $tooLarge = false;
     try {
-        $command = '/usr/bin/fetch -A -d -q -T 12 -o '
-            . escapeshellarg($temp) . ' ' . escapeshellarg($url) . ' 2>&1';
-        $output = [];
-        $status = 1;
-        exec($command, $output, $status);
-        if ($status !== 0) {
-            // fetch diagnostic messages may contain the tokenized URL;
-            // classify the failure without returning or logging raw output.
-            $details = strtolower(implode("\n", $output));
-            if (str_contains($details, 'certificate') || str_contains($details, 'ssl')
-                || str_contains($details, 'tls')) {
-                $reason = 'TLS certificate or handshake error';
-            } elseif (str_contains($details, 'refused')) {
-                $reason = 'connection refused';
-            } elseif (str_contains($details, 'timed out') || str_contains($details, 'timeout')) {
-                $reason = 'connection timeout';
-            } elseif (str_contains($details, 'resolve') || str_contains($details, 'no address')
-                || str_contains($details, 'name lookup')) {
-                $reason = 'DNS lookup failed';
-            } elseif (preg_match('/\b(30[0-9]|40[0-9]|50[0-9])\b/', $details, $matches)) {
-                $reason = 'HTTP ' . $matches[1];
-            } else {
-                $reason = 'network or HTTP error';
-            }
-            throw new \RuntimeException('Cannot download subscription (' . $reason . ')');
+        $options = [
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_RESOLVE => [$host . ':' . $port . ':' . $pinned],
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_MAXREDIRS => 0,
+            CURLOPT_PROTOCOLS_STR => 'https',
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_PROXY => '',
+            CURLOPT_NOPROXY => '*',
+            CURLOPT_CONNECTTIMEOUT => 6,
+            CURLOPT_TIMEOUT => 12,
+            CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$body, &$tooLarge): int {
+                $length = strlen($chunk);
+                if ($length > 1048576 - strlen($body)) {
+                    $tooLarge = true;
+                    return 0;
+                }
+                $body .= $chunk;
+                return $length;
+            },
+        ];
+        if (!curl_setopt_array($curl, $options)) {
+            throw new RuntimeException('Cannot configure HTTPS subscription download');
         }
-        $size = filesize($temp);
-        if ($size === false || $size > 1048576) {
-            throw new \RuntimeException('Subscription response exceeds 1 MiB');
+        $ok = @curl_exec($curl);
+        $httpStatus = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        if ($tooLarge) throw new RuntimeException('Subscription response exceeds 1 MiB');
+        if (!$ok) {
+            $errorCode = curl_errno($curl);
+            $reason = match ($errorCode) {
+                CURLE_OPERATION_TIMEDOUT => 'connection timeout',
+                CURLE_COULDNT_RESOLVE_HOST => 'DNS lookup failed',
+                CURLE_COULDNT_CONNECT => 'connection refused or unavailable',
+                CURLE_PEER_FAILED_VERIFICATION, CURLE_SSL_CONNECT_ERROR => 'TLS certificate or handshake error',
+                default => 'network or TLS error',
+            };
+            throw new RuntimeException('Cannot download subscription (' . $reason . ')');
         }
-        $body = file_get_contents($temp);
-        if ($body === false || $body === '') {
-            throw new \RuntimeException('Subscription download is empty or unreadable');
+        if ($httpStatus < 200 || $httpStatus >= 300) {
+            // Status is safe to report; URLs and response bodies are not.
+            throw new RuntimeException('Cannot download subscription (HTTP ' . $httpStatus . ')');
         }
+        if ($body === '') throw new RuntimeException('Subscription download is empty');
         return $body;
     } finally {
-        @unlink($temp);
+        curl_close($curl);
     }
 }
 
-function xray_subscription_import(string $type, string $url, string $links, callable $parseVless): array
-{
+function xray_subscription_import(
+    string $type, string $url, string $links, callable $parseVless, string $hwid = ''
+): array {
     if ($type === 'url') {
-        $body = xray_subscription_download(trim($url));
+        $body = xray_subscription_download(trim($url), $hwid);
     } elseif ($type === 'links') {
         $body = $links;
     } else {
