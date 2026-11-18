@@ -30,7 +30,7 @@ print('Configuration OK')
     core.chmod(0o755)
     controller=d/'xray-service-control.php'
     text=(ROOT/'plugin/scripts/Xray/xray-service-control.php').read_text()
-    text=text.replace("'/usr/local/bin/xray-core'",repr(str(core)))
+    text=text.replace("'/usr/local/bin/xray'",repr(str(core)))
     controller.write_text(text)
     for name in ['xray-config.php','xray-apply.php']:
         (d/name).symlink_to(ROOT/'plugin/scripts/Xray'/name)
