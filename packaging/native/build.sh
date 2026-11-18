@@ -19,8 +19,8 @@ T2S_URL="https://github.com/xjasonlyu/tun2socks/releases/download/v$T2S_VERSION/
 command -v pkg >/dev/null 2>&1
 command -v unzip >/dev/null 2>&1
 command -v fetch >/dev/null 2>&1
-[ "$(pkg info -q xray-core)" ] || { echo "Install FreeBSD/OPNsense xray-core first" >&2; exit 1; }
-[ "$(pkg info -q php84-curl)" ] || { echo "Install php84-curl first" >&2; exit 1; }
+pkg info -e xray-core || { echo "Install FreeBSD/OPNsense xray-core first" >&2; exit 1; }
+pkg info -e php84-curl || { echo "Install php84-curl first" >&2; exit 1; }
 
 mkdir -p "$DEST" "$WORK" "$PORT"
 # Use pinned, checksummed upstream release to construct a separate binary
