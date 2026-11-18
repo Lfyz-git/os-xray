@@ -24,11 +24,11 @@ jobs:
     name: Build and sign FreeBSD packages
     runs-on: ubuntu-latest
     timeout-minutes: 50
-    env:
-      OS_XRAY_REPO_KEY_B64: ${{ github.event_name == 'workflow_dispatch' && secrets.OS_XRAY_REPO_KEY_B64 || '' }}
     steps:
       - name: Require key for public publishing only
         if: github.event_name == 'workflow_dispatch'
+        env:
+          OS_XRAY_REPO_KEY_B64: ${{ secrets.OS_XRAY_REPO_KEY_B64 }}
         shell: bash
         run: |
           set -euo pipefail
@@ -68,8 +68,11 @@ jobs:
         run: |
           set -euo pipefail
           SOURCE_SHA=$(git -C source rev-parse HEAD)
-          RUNS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/native-package.yml/runs"             -f branch=feature/native-core-package-ui -f status=success -f per_page=20 --method GET)
-          RUN_ID=$(jq -r --arg sha "$SOURCE_SHA"             '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success")] | first | .id // empty' <<< "$RUNS")
+          RUNS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/native-package.yml/runs" --method GET \
+            -f branch=feature/native-core-package-ui \
+            -f status=success -f per_page=20)
+          RUN_ID=$(jq -r --arg sha "$SOURCE_SHA" \
+            '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success")] | first | .id // empty' <<< "$RUNS")
           if [[ -z "$RUN_ID" ]]; then
             echo "::error::No successful native-package.yml build found for source commit $SOURCE_SHA. Run the native package workflow first."
             exit 1
@@ -92,6 +95,8 @@ jobs:
           test -s source/dist/os-xray-3.3.0.pkg
           test -s source/dist/xray-tun2socks-2.7.0.pkg
       - name: Build packages and sign repository in FreeBSD 15.1
+        env:
+          OS_XRAY_REPO_KEY_B64: ${{ github.event_name == 'workflow_dispatch' && secrets.OS_XRAY_REPO_KEY_B64 || '' }}
         uses: vmactions/freebsd-vm@v1
         with:
           release: '15.1'
