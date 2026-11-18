@@ -32,8 +32,9 @@
         <h4>Xray-core package</h4>
         <p class="text-muted">
             Xray-core is managed separately from the os-xray plugin using the official
-            OPNsense package repository. Updates require all Xray and tun2socks
-            processes to be stopped; they never start or apply instances automatically.
+            OPNsense package repository. Updates temporarily stop running tunnels,
+            validate the new core and restart those same tunnels on success.
+            If upgrading or validation fails, tunnels may remain stopped.
         </p>
         <div class="form-group">
             <span>Installed: <strong id="xrayCorePackageInstalled">—</strong></span>
