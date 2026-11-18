@@ -30,7 +30,15 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
-          test -n "$OS_XRAY_REPO_KEY_B64" || { echo "Missing OS_XRAY_REPO_KEY_B64 secret"; exit 1; }
+          set -euo pipefail
+          test -n "$OS_XRAY_REPO_KEY_B64" || { echo "::error::Missing OS_XRAY_REPO_KEY_B64 Actions secret"; exit 1; }
+          # Check that the stored secret is a complete Base64-encoded RSA
+          # private key before starting the expensive FreeBSD VM build.
+          # Never print the decoded key, its Base64 representation, or fingerprints.
+          if ! (printf '%s' "$OS_XRAY_REPO_KEY_B64" | base64 --decode | openssl rsa -check -noout >/dev/null 2>&1); then
+            echo "::error::OS_XRAY_REPO_KEY_B64 is not a valid Base64-encoded RSA private key. Replace the repository Actions secret with the exact output of: openssl base64 -A -in os-xray-repo.key"
+            exit 1
+          fi
       - name: Checkout repository infrastructure
         uses: actions/checkout@v4
         with:
