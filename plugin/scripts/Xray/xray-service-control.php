@@ -337,6 +337,7 @@ function proc_start(string $bin, string $args, string $pidfile, string $logfile 
 {
     // daemon(8) detaches itself; do not add an untracked background shell.
     $log = escapeshellarg($logfile !== '' ? $logfile : XRAY_DAEMON_LOG);
+    if ($bin === XRAY_BIN) putenv('XRAY_LOCATION_ASSET=/usr/local/share/xray-core');
     exec('/usr/sbin/daemon -p ' . escapeshellarg($pidfile)
        . ' ' . escapeshellarg($bin) . ' ' . $args . ' >> ' . $log . ' 2>&1', $out, $rc);
     return $rc === 0;
@@ -353,6 +354,7 @@ function xray_validate_config(string $confFile): bool
         echo "ERROR: config file not found after write: {$confFile}\n";
         return false;
     }
+    putenv('XRAY_LOCATION_ASSET=/usr/local/share/xray-core');
     exec(escapeshellarg(XRAY_BIN) . ' run -test -c ' . escapeshellarg($confFile) . ' -format=json 2>&1', $out, $rc);
     if ($rc !== 0) {
         echo "ERROR: xray config validation failed:\n" . implode("\n", $out) . "\n";

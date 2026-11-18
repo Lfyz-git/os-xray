@@ -143,7 +143,7 @@ if (!$state['update_available']) {
 // Validate before interrupting existing connections.
 $configs = glob('/usr/local/etc/xray-core/config-*.json') ?: [];
 foreach ($configs as $file) {
-    [$testStatus] = core_pkg_exec(['/usr/local/bin/xray', 'run', '-test', '-c', $file]);
+    [$testStatus] = core_pkg_exec(['/usr/bin/env', 'XRAY_LOCATION_ASSET=/usr/local/share/xray-core', '/usr/local/bin/xray', 'run', '-test', '-c', $file]);
     if ($testStatus !== 0) {
         core_pkg_reply(['result' => 'error', 'message' => 'Existing applied configuration failed validation; nothing stopped']);
     }
@@ -181,7 +181,7 @@ if ($upgradeStatus !== 0 || !is_executable('/usr/local/bin/xray')) {
     core_pkg_reply(['result' => 'error', 'message' => 'Package upgrade failed; tunnels remain stopped for manual recovery']);
 }
 foreach ($configs as $file) {
-    [$testStatus] = core_pkg_exec(['/usr/local/bin/xray', 'run', '-test', '-c', $file]);
+    [$testStatus] = core_pkg_exec(['/usr/bin/env', 'XRAY_LOCATION_ASSET=/usr/local/share/xray-core', '/usr/local/bin/xray', 'run', '-test', '-c', $file]);
     if ($testStatus !== 0) {
         core_pkg_reply(['result' => 'error', 'message' => 'New Xray-core failed configuration validation; tunnels remain stopped']);
     }
