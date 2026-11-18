@@ -250,5 +250,54 @@ namespace {
         throw new \RuntimeException('Subscription DST or empty display time failed');
     }
 
+    // HWID is stable once persisted, caller-supplied IDs remain intact,
+    // and HTTP header injection is rejected before constructing cURL headers.
+    $hwid = xray_subscription_hwid('');
+    if (!preg_match('/^[0-9a-f]{32}$/D', $hwid) ||
+        xray_subscription_hwid($hwid) !== $hwid ||
+        xray_subscription_hwid('pre-registered-device') !== 'pre-registered-device') {
+        throw new \RuntimeException('HWID generation or retention failed');
+    }
+    foreach (["bad\r\nX-Extra: injected", str_repeat('x', 129), 'invalid hwid'] as $invalidHwid) {
+        try {
+            xray_subscription_hwid($invalidHwid);
+            throw new \RuntimeException('Unsafe HWID accepted');
+        } catch (\InvalidArgumentException $expected) {
+            // expected
+        }
+    }
+    // OPNsense /usr/local/opnsense/version/core contains JSON product metadata.
+    if (xray_subscription_os_version('{"product_version":"26.7.10","product_name":"OPNsense"}') !== '26.7.10' ||
+        xray_subscription_os_version('not json') !== 'unknown' ||
+        xray_subscription_os_version('{"product_version":"26.7\\r\\nInjected: 1"}') !== 'unknown') {
+        throw new \RuntimeException('OPNsense version metadata parsing failed');
+    }
+    $httpHeaders = xray_subscription_headers('pre-registered-device');
+    if (!in_array('User-Agent: os-xray/3.2.1', $httpHeaders, true) ||
+        !in_array('X-HWID: pre-registered-device', $httpHeaders, true) ||
+        !in_array('X-Device-OS: OPNsense', $httpHeaders, true) ||
+        !in_array('X-Device-Model: OPNsense Firewall', $httpHeaders, true)) {
+        throw new \RuntimeException('PasarGuard identifying headers incorrect');
+    }
+    foreach ([
+        [['ip' => '127.0.0.1']],
+        [['ip' => '8.8.8.8'], ['ip' => '192.168.1.1']],
+        [['ipv6' => '::1']],
+        [],
+    ] as $invalidRecords) {
+        try {
+            xray_subscription_public_ip($invalidRecords);
+            throw new \RuntimeException('Non-public DNS result accepted');
+        } catch (\InvalidArgumentException | \RuntimeException $expected) {
+            if ($expected->getMessage() === 'Non-public DNS result accepted') throw $expected;
+        }
+    }
+    if (xray_subscription_public_ip([['ipv6' => '2606:4700:4700::1111']])
+            !== '2606:4700:4700::1111' ||
+        xray_subscription_public_ip([['ip' => '1.1.1.1'], ['ipv6' => '2606:4700:4700::1111']])
+            !== '1.1.1.1') {
+        throw new \RuntimeException('Public IP pinning selection failed');
+    }
+
     echo "subscription smoke: OK\n";
 }

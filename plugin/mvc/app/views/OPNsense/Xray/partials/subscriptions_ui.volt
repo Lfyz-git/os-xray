@@ -112,11 +112,12 @@ $(function () {
         $('#xraySourceUrlGroup').toggle(isUrl);
         $('#xraySourceLinksGroup').toggle(!isUrl);
         $('#xraySourceInterval').closest('.form-group').toggle(isUrl);
+        $('#xraySourceHwidGroup').toggle(isUrl);
     }
 
     function resetEditor() {
         editSourceId = '';
-        $('#xraySourceName,#xraySourceUrl,#xraySourceLinks').val('');
+        $('#xraySourceName,#xraySourceUrl,#xraySourceLinks,#xraySourceHwid').val('');
         $('#xraySourceType').val('url');
         $('#xraySourceInterval').val('360');
         $('#xraySourceEditorTitle').text('Add subscription');
@@ -132,6 +133,7 @@ $(function () {
                 $('#xraySourceName').val(src.name || '');
                 $('#xraySourceType').val(src.source_type || 'url');
                 $('#xraySourceUrl').val(src.url || '');
+                $('#xraySourceHwid').val(src.hwid || '');
                 $('#xraySourceLinks').val(src.links || '');
                 $('#xraySourceInterval').val(src.refresh_interval == null ? '360' : src.refresh_interval);
                 $('#xraySourceEditorTitle').text('Edit subscription');
@@ -151,6 +153,11 @@ $(function () {
             sourceMessage('Set a name and provide an HTTPS URL or VLESS links.', true);
             return;
         }
+        var hwid = $.trim($('#xraySourceHwid').val() || '');
+        if (type === 'url' && hwid && !/^[A-Za-z0-9._:-]{1,128}$/.test(hwid)) {
+            sourceMessage('HWID must contain only letters, digits, dots, underscores, colons or dashes (max 128).', true);
+            return;
+        }
         var interval = Number($('#xraySourceInterval').val());
         if (!Number.isInteger(interval) || interval < 0 || interval > 10080) {
             sourceMessage('Interval must be 0–10080 minutes.', true);
@@ -163,7 +170,8 @@ $(function () {
             url: endpoint, method: 'POST', dataType: 'json',
             data: {subscription: {
                 enabled: '1', name: name, source_type: type, refresh_interval: interval,
-                url: $('#xraySourceUrl').val(), links: $('#xraySourceLinks').val()
+                url: $('#xraySourceUrl').val(), links: $('#xraySourceLinks').val(),
+                hwid: type === 'url' ? $.trim($('#xraySourceHwid').val() || '') : ''
             }}
         }).done(function (data) {
             if (data.result !== 'saved') {
