@@ -467,11 +467,11 @@
             $('#xrayCorePackageRepository').text(corePkgState.repository || 'OPNsense');
             $('#xrayCorePackageMessage')
                 .toggleClass('text-danger', !ok)
-                .text(corePkgState.message || (corePkgState.running
-                    ? 'Stop all instances to update the core.'
-                    : (corePkgState.update_available ? 'Core update available.' : (ok ? 'No update available.' : 'Unavailable.'))));
+                .text(corePkgState.message || (corePkgState.update_available
+                    ? 'Core update available; running tunnels will be briefly stopped and restarted.'
+                    : (ok ? 'No update available.' : 'Unavailable.')));
             $('#xrayCorePackageUpgrade').prop('disabled',
-                corePkgBusy || !ok || !corePkgState.update_available || !!corePkgState.running);
+                corePkgBusy || !ok || !corePkgState.update_available);
         }
         function corePackageRequest(url, method) {
             corePkgBusy = true;
@@ -497,8 +497,8 @@
             corePackageRequest('/api/xray/service/corepackagecheck', 'POST');
         });
         $('#xrayCorePackageUpgrade').on('click', function () {
-            if (!corePkgState || corePkgState.running || !corePkgState.update_available) return;
-            if (!confirm('Update Xray-core from the OPNsense package repository? All instances must already be stopped. No automatic restart or Apply will be performed.')) return;
+            if (!corePkgState || !corePkgState.update_available) return;
+            if (!confirm('Update Xray-core from the OPNsense repository? Running VPN tunnels will be stopped temporarily and restarted on successful validation. Connections will be interrupted. If the upgrade fails, tunnels may remain stopped. Continue?')) return;
             corePackageRequest('/api/xray/service/corepackageupgrade', 'POST');
         });
 
