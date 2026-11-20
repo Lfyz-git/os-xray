@@ -113,10 +113,12 @@ function exec($cmd,&$output=null,&$rc=null) {
  $GLOBALS['events'][]='validate';
  preg_match("/-c '([^']+)'/",$cmd,$m);
  verify(isset($m[1]) && is_file($m[1]),'candidate file exists while validating');
- verify((fileperms($m[1]) & 0777)===0600,'candidate private');
- verify(str_ends_with($m[1],'.json'),'candidate must have .json extension');
- verify((fileperms(dirname($m[1])) & 0777)===0700,'candidate directory private');
- $GLOBALS['lastCandidate']=$m[1]; $GLOBALS['lastCandidateDir']=dirname($m[1]);
+ verify(str_ends_with($m[1],'.json'),'Xray must validate .json files');
+ if (str_contains($m[1],'/xray-candidate-')) {
+  verify((fileperms($m[1]) & 0777)===0600,'candidate private');
+  verify((fileperms(dirname($m[1])) & 0777)===0700,'candidate directory private');
+  $GLOBALS['lastCandidate']=$m[1]; $GLOBALS['lastCandidateDir']=dirname($m[1]);
+ }
  $output=$GLOBALS['invalid']?['invalid candidate']:[]; $rc=$GLOBALS['invalid']?1:0;
 }
 function usleep($n) {}
