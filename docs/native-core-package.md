@@ -1,4 +1,4 @@
-# Native OPNsense package: os-xray 3.3.0 (pre-release)
+# Native OPNsense package: os-xray 3.3.0_1 (test release candidate)
 
 The standard native build is provided under `packaging/native/` and uses
 `opnsense/plugins/Mk/plugins.mk` to generate a genuine FreeBSD `.pkg`,
@@ -6,7 +6,7 @@ including OPNsense plugin metadata, generated package hooks and dependencies.
 
 ## Packages
 
-- **os-xray 3.3.0**: MVC/GUI, service actions, boot/cron integration, config
+- **os-xray 3.3.0_1**: MVC/GUI, service actions, boot/cron integration, config
   generator and subscription manager. No bundled Xray or tun2socks executable.
 - **xray-core**: regular OPNsense package (`security/xray-core`). The plugin
   uses `/usr/local/bin/xray`; its version is independent of os-xray.
@@ -31,7 +31,7 @@ clear
 sh packaging/native/build.sh
 ```
 
-Output in `dist/`: `os-xray-3.3.0.pkg` and
+Output in `dist/`: `os-xray-3.3.0_1.pkg` and
 `xray-tun2socks-2.7.0.pkg`. No installation on a running OPNsense system
 takes place during CI. The generated plugin package includes normal OPNsense
 post-install integration hooks, without running the old installer or Apply.
@@ -44,8 +44,13 @@ post-install integration hooks, without running the old installer or Apply.
 - The old v3.2.1 release is independent and remains script-installed; its
   pinned binaries are not modified by this branch.
 - The first device test must use a **clean OPNsense-Lab**, not Styx.
-- A signed private package repository and automatic firmware-GUI update path
-  are separate publication steps; these CI artifacts are *not yet a repo*.
+- The signed test repository is published at
+  `https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/test/repo`.
+  Install and upgrade via **System → Firmware → Plugins / Updates**.
+- On OPNsense-Lab, clean `3.3.0` installation, signed catalogue trust and
+  official `xray-core` dependency resolution were verified. Package-to-package
+  upgrade to `3.3.0_1` and a real Xray/tun2socks runtime start remain to verify
+  before declaring the native release stable.
 
 ## Updating the core from the GUI
 
@@ -57,5 +62,5 @@ previously running tunnels. Expect a brief interruption. An unmanaged process
 blocks the update. Failures leave instances stopped for manual diagnosis.
 
 The update orchestration, cross-process locks and error handling still need
-functional verification on OPNsense-Lab after the native package build.
+functional verification on OPNsense-Lab using the revised package.
 There is no automatic core rollback or unattended upgrade.
