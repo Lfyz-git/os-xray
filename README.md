@@ -141,7 +141,7 @@ For future upgrades, check out the next explicit release tag in a separate direc
 
 Refresh the browser (`Ctrl+F5`) and open **VPN → Xray**.
 
-1. **General** (the default page and first tab) → check **Enable Xray**, then **Save** and **Apply**. This is the **global master switch**. A checked **Enabled** box on an individual instance does **not** start Xray or tun2socks while General → Enable Xray is off. Watchdog is optional.
+1. **General** (the default page and first tab) → check **Enable Xray**, then **Save** and **Apply**. This is the **global master switch**. The **Instances** page now shows a warning and disables Start controls when the global switch is off. A checked **Enabled** box on an individual instance does **not** start Xray or tun2socks while General → Enable Xray is off. Watchdog is optional.
 2. **Subscriptions** → Add subscription. Choose an HTTPS URL or paste VLESS links, then **Save and refresh**. Review the node list.
 3. **Instances** → create or edit an instance. In **Traffic Selection**, choose **Manual** (one subscription and active node) or **LeastLoad** (selected pool across sources and explicit fallback).
 4. Optional: turn on **Sniffing** and add ordered **Custom Routing Rules**. The private-network Direct bypass stays first; rules run before the default Manual or LeastLoad route. **BitTorrent → Direct** bypasses the VPN exit.
