@@ -55,6 +55,7 @@ pkg add -f "$DEST/xray-tun2socks-$T2S_VERSION.pkg"
 # Populate upstream OPNsense plugin build layout; never invoke install.sh.
 cp "$ROOT/packaging/native/Makefile" "$PORT/Makefile"
 cp "$ROOT/packaging/native/pkg-descr" "$PORT/pkg-descr"
+cp "$ROOT/packaging/native/+POST_INSTALL.post" "$PORT/+POST_INSTALL.post"
 mkdir -p "$PORT/src/etc" "$PORT/src/opnsense/mvc" "$PORT/src/opnsense/service" "$PORT/src/opnsense/scripts"
 cp -R "$ROOT/plugin/etc/." "$PORT/src/etc/"
 cp -R "$ROOT/plugin/mvc/." "$PORT/src/opnsense/mvc/"
