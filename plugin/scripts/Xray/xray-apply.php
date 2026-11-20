@@ -26,30 +26,34 @@ function xray_atomic_write(string $path, string $bytes): bool
 
 function xray_prepare_candidate(array $c): ?array
 {
-    $tmp = false;
+    $candidateDir = null;
+    $candidateFile = null;
     try {
         if (!empty($c['balancer_error'])) {
             throw new InvalidArgumentException($c['balancer_error']);
         }
         $json = xray_normalize_transport(json_encode(xray_build_config($c),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-        // Newer Xray cores infer the config loader from the filename even
-        // when -format=json is passed. A bare tempnam() path is rejected.
-        $tmp = tempnam(sys_get_temp_dir(), 'xray-candidate-');
-        if ($tmp === false) throw new RuntimeException('Cannot create private candidate');
-        $jsonPath = $tmp . '.json';
-        if (!rename($tmp, $jsonPath)) throw new RuntimeException('Cannot name private JSON candidate');
-        $tmp = $jsonPath;
-        if (!chmod($tmp, 0600) || file_put_contents($tmp, $json) !== strlen($json)) {
+
+        // Xray 26.10+ requires .json even when -format=json is supplied.
+        // A private directory avoids a race while constructing the JSON suffix
+        // in shared /tmp; the candidate contains subscription credentials.
+        $dir = sys_get_temp_dir() . '/xray-candidate-' . bin2hex(random_bytes(16));
+        if (!@mkdir($dir, 0700)) throw new RuntimeException('Cannot create private candidate directory');
+        $candidateDir = $dir;
+        $candidateFile = $dir . '/config.json';
+        if (file_put_contents($candidateFile, $json) !== strlen($json) ||
+            !chmod($candidateFile, 0600)) {
             throw new RuntimeException('Cannot write private candidate');
         }
-        if (!xray_validate_config($tmp)) return null;
+        if (!xray_validate_config($candidateFile)) return null;
         return ['json' => $json, 'yaml' => xray_build_t2s_config($c)];
     } catch (Throwable $e) {
         echo 'ERROR: ' . $e->getMessage() . "\n";
         return null;
     } finally {
-        if ($tmp !== false) @unlink($tmp);
+        if ($candidateFile !== null) @unlink($candidateFile);
+        if ($candidateDir !== null) @rmdir($candidateDir);
     }
 }
 
