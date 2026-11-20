@@ -1,4 +1,4 @@
-name: Publish signed os-xray test repository
+name: Publish signed os-xray package repositories
 
 # Push runs only an isolated signature/catalogue smoke check.
 # Deployment is manual; an ordinary push never publishes anything.
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: os-xray-test-pages
+  group: os-xray-pkg-pages
   cancel-in-progress: false
 
 jobs:
@@ -118,6 +118,9 @@ jobs:
           tar -tzf os-xray-test-signed-repo.tar.gz > repo-tar-contents.txt
           grep -Fxq './FreeBSD:15:amd64/26.7/test/repo/os-xray-3.3.0_1.pkg' repo-tar-contents.txt
           grep -Fxq './FreeBSD:15:amd64/26.7/test/repo/xray-tun2socks-2.7.0.pkg' repo-tar-contents.txt
+          grep -Fxq './FreeBSD:15:amd64/26.7/stable/repo/os-xray-3.3.0_1.pkg' repo-tar-contents.txt
+          grep -Fxq './FreeBSD:15:amd64/26.7/stable/repo/xray-tun2socks-2.7.0.pkg' repo-tar-contents.txt
+          grep -Fxq './os-xray.conf' repo-tar-contents.txt
           grep -Fxq './Keys/repo.pub' repo-tar-contents.txt
       - name: Preserve signed packages for inspection
         if: github.event_name == 'workflow_dispatch'
