@@ -1,6 +1,7 @@
 # Private native OPNsense plugin. Uses the standard opnsense/plugins build system.
 PLUGIN_NAME=           xray
 PLUGIN_VERSION=        3.3.0
+PLUGIN_REVISION=       1
 # The upstream master tree enables -devel by default; our private pkg is os-xray.
 PLUGIN_DEVEL=          
 PLUGIN_TIER=           4
