@@ -23,7 +23,10 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare release archive
+      # Pre-3.3 tags distribute the old script installer archive.
+      # Native v3.3+ releases use the signed pkg repository instead.
+      - name: Prepare legacy release archive
+        if: ${{ !startsWith(github.ref_name, 'v3.3.') }}
         run: |
           ARCHIVE_DIR="opnsense-xray"
           ARCHIVE_NAME="opnsense-xray-${{ steps.version.outputs.VERSION }}"
@@ -60,7 +63,20 @@ jobs:
           fi
           cp "$NOTES" "$RUNNER_TEMP/os-xray-release-notes.md"
 
-      - name: Create GitHub Release
+      - name: Create native package GitHub Release
+        if: ${{ startsWith(github.ref_name, 'v3.3.') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: "os-xray native ${{ steps.version.outputs.VERSION }}"
+          body_path: ${{ runner.temp }}/os-xray-release-notes.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-rc') || contains(steps.version.outputs.VERSION, '-beta') || contains(steps.version.outputs.VERSION, '-alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create legacy installer GitHub Release
+        if: ${{ !startsWith(github.ref_name, 'v3.3.') }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
