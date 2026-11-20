@@ -8,9 +8,12 @@ This release introduces installation and updates through the standard OPNsense *
 - **xray-tun2socks 2.7.0** — separate checksum-verified private dependency.
 - **xray-core** and **php85-curl** — dependencies resolved from the **official OPNsense** firmware repository, not bundled or pinned by os-xray.
 
-Packages are distributed via the signed test repository:
+Packages are distributed via the signed **stable** repository:
 
-`https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/test/repo`
+`https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/stable/repo`
+
+A separate signed `/test/repo` channel remains available for OPNsense-Lab. Both
+catalogues are produced from the same validated, freshly rebuilt package set.
 
 [Install instructions and trust-key verification](https://github.com/Lfyz-git/os-xray/blob/main/packaging/repository/README.md)
 
@@ -37,4 +40,4 @@ Packages are distributed via the signed test repository:
 - Do not replace official OPNsense repositories with FreeBSD ports or override system-owned core binaries.
 - Tests were performed on **OPNsense-Lab**, not Styx. Before any production deployment, take a backup, arrange independent console access and plan controlled VPN downtime.
 
-This native release intentionally has **no legacy installer tarball**. The signed package repository is the distribution channel.
+This native release intentionally has **no legacy installer tarball**. The signed stable package repository is the distribution channel.
