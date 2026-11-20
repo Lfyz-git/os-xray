@@ -37,8 +37,9 @@ support commitment is required.
    administrator UI action; committing the workflow does not enable Pages.
 
 3. Actions → **Publish signed os-xray test repository** → Run workflow on
-   `main`. The workflow checks out the native package draft branch,
-   builds both native packages in an isolated FreeBSD 15.1 amd64 VM,
+   `main`. The workflow pins the **same main commit** for both
+   repository infrastructure and native-package source, then builds both
+   native packages in an isolated FreeBSD 15.1 amd64 VM,
    signs the catalogue, verifies it using an isolated `pkg` client,
    uploads inspected artifacts and deploys to GitHub Pages. Private
    key material is decoded only into `/tmp` in the VM, then deleted.
@@ -102,6 +103,9 @@ resolution and installation logs. Do not enable it on Styx.
 ## Release boundaries
 
 - The publication workflow runs manually, never on ordinary pushes.
+- Only after the updated package passes OPNsense-Lab upgrade and runtime tests,
+  tag `v3.3.0`. The tag workflow creates a native GitHub Release linking this
+  signed repository; it does **not** publish an obsolete `install.sh` archive.
 - No migrator, legacy upgrade code, or backwards-compatibility tests.
 - The test channel is deliberately separate from a future stable channel.
 - A subsequent package-only revision can verify Firmware GUI updates.

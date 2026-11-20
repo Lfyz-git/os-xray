@@ -42,12 +42,12 @@ jobs:
       - name: Checkout repository infrastructure
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || 'feature/native-pkg-test-repository' }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || 'feature/native-pkg-test-repository' }}
           path: infrastructure
       - name: Checkout native package draft
         uses: actions/checkout@v4
         with:
-          ref: feature/native-core-package-ui
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || 'feature/native-core-package-ui' }}
           path: source
       - name: Checkout OPNsense plugin build system
         uses: actions/checkout@v4
