@@ -1,14 +1,15 @@
-# os-xray test pkg repository — OPNsense 26.7 amd64
+# os-xray signed pkg repositories — OPNsense 26.7 amd64
 
-This is a **personal test repository** hosted on GitHub Pages of
-`Lfyz-git/os-xray`. It contains exactly two packages:
+Two signed channels are hosted on GitHub Pages under `Lfyz-git/os-xray`:
+**stable**, intended for native releases, and **test**, retained for
+OPNsense-Lab verification. Both currently contain the same two packages:
 
 - `os-xray-3.3.0_1.pkg` — native OPNsense plugin, first update after Lab validation.
 - `xray-tun2socks-2.7.0.pkg` — separate, checksum-verified dependency.
 
 `xray-core` and `php85-curl` remain dependencies from **OPNsense**,
-not repackaged or overridden. The test repo uses the standard `pkg` metadata
-format and a signed catalogue. No official OPNsense plugin listing or
+not repackaged or overridden. Both channels use standard `pkg` metadata
+and separately signed catalogues with the same pinned public key. No official OPNsense plugin listing or
 support commitment is required.
 
 ## One-time administrator setup (GitHub)
@@ -36,17 +37,22 @@ support commitment is required.
    deployment source to **GitHub Actions**. This requires a one-time
    administrator UI action; committing the workflow does not enable Pages.
 
-3. Actions → **Publish signed os-xray test repository** → Run workflow on
+3. Actions → **Publish signed os-xray package repositories** → Run workflow on
    `main`. The workflow pins the **same main commit** for both
    repository infrastructure and native-package source, then builds both
    native packages in an isolated FreeBSD 15.1 amd64 VM,
-   signs the catalogue, verifies it using an isolated `pkg` client,
+   signs both catalogues and verifies each using an isolated `pkg` client,
    uploads inspected artifacts and deploys to GitHub Pages. Private
    key material is decoded only into `/tmp` in the VM, then deleted.
 
-The resulting public URL is:
+The resulting public URLs are:
 
-`https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/test/repo`
+- Stable: `https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/stable/repo`
+- Lab/test: `https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/test/repo`
+
+The bootstrap configs are [os-xray.conf](https://lfyz-git.github.io/os-xray/os-xray.conf)
+for stable and [os-xray-test.conf](https://lfyz-git.github.io/os-xray/os-xray-test.conf)
+for test. **Enable only one channel on a given OPNsense host.**
 
 The site is only available after GitHub Pages is enabled and the
 manual publish workflow finishes successfully.
@@ -68,11 +74,12 @@ dependency resolution must also be checked when installing on OPNsense-Lab.
 The intentionally pinned, checksum-verified `tun2socks` 2.7.0 source is
 separate from the no-stale-cache rule.
 
-## On a freshly installed OPNsense-Lab only
+## Clean native installation on OPNsense 26.7 amd64
 
 This is **not** a migration from the old `install.sh` installation.
-First ensure Lab has no manually installed copies of os-xray binaries,
-MVC files or service hooks.
+First ensure the target has no manually installed copies of os-xray binaries,
+MVC files or service hooks. On Styx, this requires a separate planned
+legacy-removal maintenance window; no automatic migration is provided.
 
 Download the **public** key and compare its checksum with your own
 locally generated `os-xray-repo.pub`. Do not trust it solely because
@@ -86,19 +93,20 @@ sudo mkdir -p /usr/local/etc/pkg/keys /usr/local/etc/pkg/repos
 sudo fetch -o /usr/local/etc/pkg/keys/os-xray.pub \
   https://lfyz-git.github.io/os-xray/Keys/repo.pub
 sha256 /usr/local/etc/pkg/keys/os-xray.pub
-sudo fetch -o /usr/local/etc/pkg/repos/os-xray-test.conf \
-  https://lfyz-git.github.io/os-xray/os-xray-test.conf
-sudo pkg update -f -r os-xray-test
-pkg rquery -r os-xray-test '%n %v %R' os-xray
-pkg rquery -r os-xray-test '%n %v %R' xray-tun2socks
+sudo fetch -o /usr/local/etc/pkg/repos/os-xray.conf \
+  https://lfyz-git.github.io/os-xray/os-xray.conf
+sudo pkg update -f -r os-xray
+pkg rquery -r os-xray '%n %v %R' os-xray
+pkg rquery -r os-xray '%n %v %R' xray-tun2socks
 ```
 
 Expected: `26.7`, `amd64`, a matching public-key SHA-256, and
-exactly the two packages from `os-xray-test`. Stop if anything differs.
+exactly the two packages from `os-xray`. Stop if anything differs.
 
 Then inspect System → Firmware → Plugins, enable **Show community plugins**,
 find `os-xray` and install using the normal GUI. Observe dependency
-resolution and installation logs. Do not enable it on Styx.
+resolution and installation logs. On Styx, carry out the independent
+script-removal and reconfiguration plan **before** following these steps.
 
 ## Release boundaries
 
@@ -107,7 +115,9 @@ resolution and installation logs. Do not enable it on Styx.
   tag `v3.3.0`. The tag workflow creates a native GitHub Release linking this
   signed repository; it does **not** publish an obsolete `install.sh` archive.
 - No migrator, legacy upgrade code, or backwards-compatibility tests.
-- The test channel is deliberately separate from a future stable channel.
+- The stable channel is separate from Lab's test channel. Do not enable both
+  configurations simultaneously. Both are generated from the same verified
+  package build and are signed with the existing public key.
 - A subsequent package-only revision can verify Firmware GUI updates.
 - Disable `os-xray-test` after experimenting if it is not needed.
 - Do not delete the private signing key after initial publication: every
