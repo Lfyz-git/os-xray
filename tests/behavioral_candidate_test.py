@@ -20,6 +20,7 @@ if sys.argv[1:]==['version']:
 assert sys.argv[1:4]==['run','-test','-c'],sys.argv
 assert sys.argv[5:]==['-format=json'],sys.argv
 p=Path(sys.argv[4])
+assert p.suffix == '.json', f'Xray requires JSON candidate extension: {p.name}'
 assert p.stat().st_mode & 0o777==0o600
 config=json.loads(p.read_text())
 Path(__file__).with_name('candidate-record.json').write_text(json.dumps({'path':str(p),'config':config}))
