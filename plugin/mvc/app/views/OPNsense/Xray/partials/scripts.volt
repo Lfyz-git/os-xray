@@ -546,12 +546,21 @@
             });
         });
 
-        // ── Tab hash ────────────────────────────────────────────────
-        if (window.location.hash !== "") {
-            $('a[href="' + window.location.hash + '"]').click();
+        // ── Sidebar links and tab URL hashes ────────────────────────
+        // Sidebar entries use /ui/xray/#<tab>. Handle both initial page
+        // loading and same-page hash navigation without a full reload.
+        var xrayTabs = ['#general', '#instances', '#subscriptions', '#diagnostics', '#logs', '#advanced'];
+        function activateXrayTabFromHash() {
+            var hash = window.location.hash || '#general';
+            if (xrayTabs.indexOf(hash) === -1) return;
+            $('#maintabs a[href="' + hash + '"]').tab('show');
         }
-        $('.nav-tabs a').on('shown.bs.tab', function (e) {
-            history.pushState(null, null, e.target.hash);
+        $(window).on('hashchange', activateXrayTabFromHash);
+        activateXrayTabFromHash();
+        $('#maintabs a').on('shown.bs.tab', function (e) {
+            if (window.location.hash !== e.target.hash) {
+                history.pushState(null, '', e.target.hash);
+            }
         });
     });
 </script>
