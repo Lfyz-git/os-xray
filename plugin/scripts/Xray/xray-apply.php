@@ -33,8 +33,14 @@ function xray_prepare_candidate(array $c): ?array
         }
         $json = xray_normalize_transport(json_encode(xray_build_config($c),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        // Newer Xray cores infer the config loader from the filename even
+        // when -format=json is passed. A bare tempnam() path is rejected.
         $tmp = tempnam(sys_get_temp_dir(), 'xray-candidate-');
-        if ($tmp === false || !chmod($tmp, 0600) || file_put_contents($tmp, $json) !== strlen($json)) {
+        if ($tmp === false) throw new RuntimeException('Cannot create private candidate');
+        $jsonPath = $tmp . '.json';
+        if (!rename($tmp, $jsonPath)) throw new RuntimeException('Cannot name private JSON candidate');
+        $tmp = $jsonPath;
+        if (!chmod($tmp, 0600) || file_put_contents($tmp, $json) !== strlen($json)) {
             throw new RuntimeException('Cannot write private candidate');
         }
         if (!xray_validate_config($tmp)) return null;
