@@ -21,12 +21,20 @@ Packages are distributed via the signed test repository:
 - **General**, **Instances**, **Subscriptions**, **Diagnostics**, **Log** and **Advanced** are available in the OPNsense sidebar; installation and upgrades refresh the sidebar cache.
 - Xray-core updates can be checked and deliberately applied in **Advanced**, with temporary tunnel interruption permitted and managed restart.
 
+## Acceptance testing on OPNsense-Lab
+
+- Signed catalogue and public-key trust verification; clean native installation via Firmware → Plugins.
+- GUI update from `os-xray 3.3.0` to `3.3.0_1` preserved the subscription and instance.
+- The global Enabled switch, navigation and instance status were verified.
+- Subscription refresh, Xray 26.10.21 configuration validation, Xray/tun2socks start and IPv4 client forwarding succeeded. With LeastLoad, the client exited via Kalamar-CZ (`85.137.165.251`) and Kalamar-KG (`91.213.233.53`) rather than the previous direct WAN address.
+- Independent Xray-core upgrades, boot recovery and package removal have **not** been fully exercised on the revised package.
+
 ## Scope
 
 - Target: **OPNsense 26.7 / FreeBSD 15 amd64**.
-- Use a clean native install or an update from an earlier **pkg-installed** os-xray version.
+- Use a clean native install or an update from an earlier **pkg-installed** os-xray version. Legacy script installations, including Styx, require a separately planned clean reinstall and manual reconfiguration.
 - **No migration** from `install.sh` / `upgrade.sh` installations, and no promise of upstream or long-term community support.
 - Do not replace official OPNsense repositories with FreeBSD ports or override system-owned core binaries.
-- Test on **OPNsense-Lab** before using on any production firewall. In particular, verify subscriptions, live tunnel startup, routing and package upgrade behaviour.
+- Tests were performed on **OPNsense-Lab**, not Styx. Before any production deployment, take a backup, arrange independent console access and plan controlled VPN downtime.
 
 This native release intentionally has **no legacy installer tarball**. The signed package repository is the distribution channel.

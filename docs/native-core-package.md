@@ -1,4 +1,4 @@
-# Native OPNsense package: os-xray 3.3.0_1 (test release candidate)
+# Native OPNsense package: os-xray 3.3.0_1 (v3.3.0)
 
 The standard native build is provided under `packaging/native/` and uses
 `opnsense/plugins/Mk/plugins.mk` to generate a genuine FreeBSD `.pkg`,
@@ -15,8 +15,8 @@ including OPNsense plugin metadata, generated package hooks and dependencies.
   `/usr/local/libexec/os-xray/tun2socks`, never on top of an official package.
 - **php85-curl**: normal OPNsense package needed by HTTPS subscriptions.
 
-The native plugin depends on the three other packages. A future private
-repository will carry `os-xray` and `xray-tun2socks`; the official OPNsense
+The native plugin depends on the three other packages. The **signed private
+repository** carries `os-xray` and `xray-tun2socks`; the official OPNsense
 repository provides `xray-core` and `php85-curl`.
 
 ## Build
@@ -43,14 +43,19 @@ post-install integration hooks, without running the old installer or Apply.
   or compatibility paths for `install.sh` or `upgrade.sh`.
 - The old v3.2.1 release is independent and remains script-installed; its
   pinned binaries are not modified by this branch.
-- The first device test must use a **clean OPNsense-Lab**, not Styx.
+- Initial acceptance testing was done on **OPNsense-Lab**, not Styx.
 - The signed test repository is published at
   `https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/test/repo`.
   Install and upgrade via **System → Firmware → Plugins / Updates**.
-- On OPNsense-Lab, clean `3.3.0` installation, signed catalogue trust and
-  official `xray-core` dependency resolution were verified. Package-to-package
-  upgrade to `3.3.0_1` and a real Xray/tun2socks runtime start remain to verify
-  before declaring the native release stable.
+- OPNsense-Lab validated signed catalogue trust, clean GUI installation of
+  `3.3.0`, the stock OPNsense `xray-core` dependency, native GUI update to
+  `3.3.0_1`, successful subscription refresh, Xray/tun2socks startup and
+  IPv4 client egress through the CZ (`85.137.165.251`) and KG
+  (`91.213.233.53`) Kalamar exits using LeastLoad. The Lab client routed via
+  OPNsense-Lab gateway `10.105.0.2`.
+- Production migration from `install.sh` is intentionally **not** supported.
+  An existing legacy device requires a separate, manually planned clean
+  installation with backup and reconfiguration, not an in-place pkg upgrade.
 
 ## Updating the core from the GUI
 
@@ -61,6 +66,8 @@ which managed tunnels are running, stops those tunnels, upgrades only
 previously running tunnels. Expect a brief interruption. An unmanaged process
 blocks the update. Failures leave instances stopped for manual diagnosis.
 
-The update orchestration, cross-process locks and error handling still need
-functional verification on OPNsense-Lab using the revised package.
+The independent **Xray-core upgrade path**, system reboot recovery and
+package removal have not all been exercised in the final Lab scenario.
+Do not treat the successfully tested native plugin package upgrade as proof
+that independent core upgrades are validated.
 There is no automatic core rollback or unattended upgrade.
