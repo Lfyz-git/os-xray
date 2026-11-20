@@ -15,8 +15,8 @@ including OPNsense plugin metadata, generated package hooks and dependencies.
   `/usr/local/libexec/os-xray/tun2socks`, never on top of an official package.
 - **php85-curl**: normal OPNsense package needed by HTTPS subscriptions.
 
-The native plugin depends on the three other packages. The **signed private
-repository** carries `os-xray` and `xray-tun2socks`; the official OPNsense
+The native plugin depends on the three other packages. The **signed private stable and test
+repositories** carry `os-xray` and `xray-tun2socks`; the official OPNsense
 repository provides `xray-core` and `php85-curl`.
 
 ## Build
@@ -44,8 +44,10 @@ post-install integration hooks, without running the old installer or Apply.
 - The old v3.2.1 release is independent and remains script-installed; its
   pinned binaries are not modified by this branch.
 - Initial acceptance testing was done on **OPNsense-Lab**, not Styx.
-- The signed test repository is published at
-  `https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/test/repo`.
+- The signed **stable** repository is published at
+  `https://lfyz-git.github.io/os-xray/FreeBSD:15:amd64/26.7/stable/repo`.
+  A separate `/test/repo` channel remains for OPNsense-Lab; both are built and
+  signed from the same new artifacts. Install only one channel per firewall.
   Install and upgrade via **System → Firmware → Plugins / Updates**.
 - OPNsense-Lab validated signed catalogue trust, clean GUI installation of
   `3.3.0`, the stock OPNsense `xray-core` dependency, native GUI update to
