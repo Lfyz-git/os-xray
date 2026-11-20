@@ -8,7 +8,7 @@
 [![OPNsense](https://img.shields.io/badge/OPNsense-26.7.x-blue)](https://opnsense.org)
 [![FreeBSD](https://img.shields.io/badge/FreeBSD-15.1%20amd64-red)](https://freebsd.org)
 
-**Xray-core VPN plugin for OPNsense** — independent Lfyz-git fork v3.2.1
+**Xray-core VPN plugin for OPNsense** — independent Lfyz-git fork v3.3.0 (native OPNsense package)
 
 Xray-core + tun2socks — native VPN client for OPNsense, with global subscriptions, selectable outbound nodes, LeastLoad balancing and per-instance routing rules.
 
@@ -27,7 +27,7 @@ Xray-core + tun2socks — native VPN client for OPNsense, with global subscripti
 - **VLESS import** — accepts share links (including xhttp, ws, grpc, h2 and kcp transport settings where present) and JSON outbound collections; the backend builds the SOCKS inbound and routing
 - VLESS+REALITY import supports current flat Xray 26.x settings and legacy vnext compatibility; REALITY supports password/publicKey compatibility
 - Tunnel management via GUI: **VPN → Xray**
-- Auto-detects and imports existing xray-core and tun2socks configs during installation
+- The legacy v3.2.1 script installer detected existing configurations; **native v3.3.0 does not migrate script-installed settings**
 - Compatible with OPNsense selective routing (Firewall Aliases + Rules + Gateway)
 - **Start / Stop / Restart buttons** — manage the service directly from GUI without page reload
 - **Validate Config button** — dry-run config through `xray -test` without stopping the service (in instance dialog footer)
@@ -62,22 +62,28 @@ Firewall Rules (selective routing)
 |------------|-------------------------|
 | OPNsense   | 26.7.x (tested target)   |
 | FreeBSD    | 15.1 amd64              |
-| xray-core  | 26.3.27 stable (pinned); 26.9.9 prerelease compatible candidate |
+| xray-core  | Official OPNsense package; independently installable and updatable |
 | tun2socks  | 2.7.0 (tested/pinned)    |
 
 ---
 
-> **Version policy:** the installer pins the tested Xray-core 26.3.27 and tun2socks 2.7.0 binaries. Updating these binaries is separate from releasing the OPNsense plugin.
+**Current release:** `v3.3.0` is native OPNsense package `os-xray 3.3.0_1`. The `xray-core` executable comes from the official OPNsense repository and can be independently updated via **Advanced**; `xray-tun2socks 2.7.0` is a separate dependency from our signed repository. The pinned Xray 26.3.27 version applies **only to the archived v3.2.1 script installer**.
 
+## Recommended installation: native v3.3.0 package
 
-> **Native package work (draft):** `os-xray 3.3.0` is being packaged as
-> an OPNsense `.pkg` with separately managed `xray-core` and `xray-tun2socks`.
-> This is not the published v3.2.1 script release. Build instructions:
-> [Native package](docs/native-core-package.md). No script-to-pkg migration is provided.
+**OPNsense 26.7, amd64.** Add our signed package repository, independently verify the published key's SHA-256 fingerprint, then install `os-xray` via **System → Firmware → Plugins**. Full instructions and repository URL: [Native pkg repository](packaging/repository/README.md).
 
-## Installation
+After installation, open **VPN → Xray → General**, enable the global **Enable Xray** switch and click **Save / Apply**. Add your subscription and instance; the global switch and individual instance must both be enabled to run.
 
-**Option 1 — via git clone (recommended)**
+**Important for existing script-installed systems such as Styx:** do not install the native package over `install.sh` files. Plan a separate clean installation with configuration backup, controlled tunnel shutdown and manual reconfiguration. **No automatic script-to-package migration is implemented or supported.**
+
+Further details: [Native package architecture and constraints](docs/native-core-package.md).
+
+---
+
+## Archived v3.2.1 script installer (NOT for v3.3.0)
+
+**Archived option 1 — via git clone**
 
 ```sh
 cd /tmp
@@ -112,7 +118,7 @@ configctl xray version
 
 ---
 
-## Updating an existing 3.x installation (configuration-preserving)
+## Updating the legacy v3.2.1 script installation (not native pkg)
 
 **Do not use `install.sh` for routine live upgrades.** It also performs first-install imports, legacy migrations, binary checks and legacy PID cleanup. For an already configured 3.x instance, use the separate `upgrade.sh` from the intended **release tag/main commit**, not a moving development branch.
 
