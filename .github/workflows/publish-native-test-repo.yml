@@ -116,7 +116,7 @@ jobs:
           tar -czf os-xray-test-signed-repo.tar.gz -C site .
           test -s os-xray-test-signed-repo.tar.gz
           tar -tzf os-xray-test-signed-repo.tar.gz > repo-tar-contents.txt
-          grep -Fxq './FreeBSD:15:amd64/26.7/test/repo/os-xray-3.3.0.pkg' repo-tar-contents.txt
+          grep -Fxq './FreeBSD:15:amd64/26.7/test/repo/os-xray-3.3.0_1.pkg' repo-tar-contents.txt
           grep -Fxq './FreeBSD:15:amd64/26.7/test/repo/xray-tun2socks-2.7.0.pkg' repo-tar-contents.txt
           grep -Fxq './Keys/repo.pub' repo-tar-contents.txt
       - name: Preserve signed packages for inspection
