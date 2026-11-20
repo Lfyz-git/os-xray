@@ -18,6 +18,11 @@ jobs:
           sh -n install.sh
           sh -n upgrade.sh
           sh -n plugin/etc/rc.syshook.d/start/50-xray
+          sh -n packaging/repository/build-signed-site.sh
+          # Stable and test signed catalogues must be independently verified.
+          grep -Fq 'pkg repo "$STABLE_REPO" "rsa:$KEY"' packaging/repository/build-signed-site.sh
+          grep -Fq 'update -f -r os-xray' packaging/repository/build-signed-site.sh
+          grep -Fq "stable/repo/os-xray-3.3.0_1.pkg" .github/workflows/publish-native-test-repo.yml
           find plugin -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           python3 - <<'PY'
           import pathlib
