@@ -3,7 +3,7 @@
 This is a **personal test repository** hosted on GitHub Pages of
 `Lfyz-git/os-xray`. It contains exactly two packages:
 
-- `os-xray-3.3.0.pkg` — native OPNsense plugin, experimental.
+- `os-xray-3.3.0_1.pkg` — native OPNsense plugin, first update after Lab validation.
 - `xray-tun2socks-2.7.0.pkg` — separate, checksum-verified dependency.
 
 `xray-core` and `php85-curl` remain dependencies from **OPNsense**,
