@@ -3,7 +3,7 @@
         <id>general.enabled</id>
         <label>Enable Xray</label>
         <type>checkbox</type>
-        <help>Enable the Xray-core VLESS+Reality VPN service (xray-core + tun2socks)</help>
+        <help>Global master switch. Enable this and click Apply before starting any instance; instance-level Enabled alone is not sufficient.</help>
     </field>
     <field>
         <id>general.watchdog_enabled</id>
