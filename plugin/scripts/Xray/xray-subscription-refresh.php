@@ -62,7 +62,7 @@ function xray_subscription_validate_candidate(array $sources, $instance): void
         }
     }
     $candidate = xray_build_config($candidateSettings);
-    $bin = '/usr/local/bin/xray-core';
+    $bin = '/usr/local/bin/xray';
     if (!is_executable($bin)) {
         throw new RuntimeException('Xray binary is unavailable');
     }
@@ -77,6 +77,7 @@ function xray_subscription_validate_candidate(array $sources, $instance): void
         }
         $output = [];
         $status = 1;
+        putenv('XRAY_LOCATION_ASSET=/usr/local/share/xray-core');
         exec(escapeshellarg($bin) . ' run -test -c ' . escapeshellarg($tmp)
             . ' -format=json 2>&1', $output, $status);
         if ($status !== 0) {

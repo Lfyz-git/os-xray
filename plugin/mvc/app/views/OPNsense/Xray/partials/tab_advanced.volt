@@ -29,6 +29,29 @@
 </style>
 <div id="advanced" class="tab-pane fade in">
     <div class="xray-advanced-body">
+        <h4>Xray-core package</h4>
+        <p class="text-muted">
+            Xray-core is managed separately from the os-xray plugin using the official
+            OPNsense package repository. Updates temporarily stop running tunnels,
+            validate the new core and restart those same tunnels on success.
+            If upgrading or validation fails, tunnels may remain stopped.
+        </p>
+        <div class="form-group">
+            <span>Installed: <strong id="xrayCorePackageInstalled">—</strong></span>
+            <span style="margin-left: 16px;">Available: <strong id="xrayCorePackageAvailable">—</strong></span>
+            <span style="margin-left: 16px;">Source: <strong id="xrayCorePackageRepository">OPNsense</strong></span>
+        </div>
+        <div class="form-group">
+            <button id="xrayCorePackageCheck" type="button" class="btn btn-default btn-sm">
+                Check core updates
+            </button>
+            <button id="xrayCorePackageUpgrade" type="button" class="btn btn-warning btn-sm" disabled>
+                Update Xray-core
+            </button>
+            <span id="xrayCorePackageMessage" role="status" class="text-muted" style="margin-left:12px;"></span>
+        </div>
+        <hr>
+
         <div class="form-group xray-advanced-instance-group">
             <label for="xrayAdvancedInstance">Instance</label>
             <select class="form-control" id="xrayAdvancedInstance">

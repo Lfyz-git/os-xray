@@ -113,8 +113,12 @@ function exec($cmd,&$output=null,&$rc=null) {
  $GLOBALS['events'][]='validate';
  preg_match("/-c '([^']+)'/",$cmd,$m);
  verify(isset($m[1]) && is_file($m[1]),'candidate file exists while validating');
- verify((fileperms($m[1]) & 0777)===0600,'candidate private');
- $GLOBALS['lastCandidate']=$m[1];
+ verify(str_ends_with($m[1],'.json'),'Xray validation requires .json extension');
+ if (str_contains($m[1], '/xray-candidate-')) {
+  verify((fileperms($m[1]) & 0777)===0600,'candidate private');
+  verify((fileperms(dirname($m[1])) & 0777)===0700,'candidate directory private');
+  $GLOBALS['lastCandidate']=$m[1]; $GLOBALS['lastCandidateDir']=dirname($m[1]);
+ }
  $output=$GLOBALS['invalid']?['invalid candidate']:[]; $rc=$GLOBALS['invalid']?1:0;
 }
 function usleep($n) {}
@@ -150,7 +154,7 @@ SCENARIOS = {
  'P0_first_start': r'''
 verify(xray_apply_action('start',A),'first Start'); verify(started(A),'pair ready');
 verify(file_get_contents(xray_applied_hash_path(A))===xray_instance_hash($all[A]),'hash after success');
-verify(!is_file($lastCandidate),'candidate removed');
+verify(!is_file($lastCandidate),'candidate removed'); verify(!is_dir($lastCandidateDir),'candidate directory removed');
 ''',
  'P0_stop_start': r'''
 seed(A); verify(xray_apply_action('stop',A),'Stop'); verify(!xray_any_running(A),'both stopped');

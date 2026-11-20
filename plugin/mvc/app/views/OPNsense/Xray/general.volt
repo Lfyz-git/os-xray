@@ -24,9 +24,9 @@
 {{ partial('OPNsense/Xray/partials/subscriptions_ui') }}
 
 <ul class="nav nav-tabs" data-tabs="tabs" id="maintabs">
-    <li class="active"><a data-toggle="tab" href="#instances">{{ lang._('Instances') }}</a></li>
+    <li class="active"><a data-toggle="tab" href="#general">{{ lang._('General') }}</a></li>
+    <li><a data-toggle="tab" href="#instances">{{ lang._('Instances') }}</a></li>
     <li><a data-toggle="tab" href="#subscriptions">{{ lang._('Subscriptions') }}</a></li>
-    <li><a data-toggle="tab" href="#general">{{ lang._('General') }}</a></li>
     <li><a data-toggle="tab" href="#diagnostics">{{ lang._('Diagnostics') }}</a></li>
     <li><a data-toggle="tab" href="#logs">{{ lang._('Log') }}</a></li>
     <li><a data-toggle="tab" href="#advanced">{{ lang._('Advanced') }}</a></li>
@@ -37,7 +37,7 @@
     {{ partial('OPNsense/Xray/partials/tab_subscriptions') }}
     {{ partial('OPNsense/Xray/partials/tab_advanced') }}
 
-    <div id="general" class="tab-pane fade in">
+    <div id="general" class="tab-pane fade in active">
         {{ partial("layout_partials/base_form", {'fields': generalForm, 'id': 'frm_general_settings'}) }}
     </div>
 

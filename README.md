@@ -69,6 +69,12 @@ Firewall Rules (selective routing)
 
 > **Version policy:** the installer pins the tested Xray-core 26.3.27 and tun2socks 2.7.0 binaries. Updating these binaries is separate from releasing the OPNsense plugin.
 
+
+> **Native package work (draft):** `os-xray 3.3.0` is being packaged as
+> an OPNsense `.pkg` with separately managed `xray-core` and `xray-tun2socks`.
+> This is not the published v3.2.1 script release. Build instructions:
+> [Native package](docs/native-core-package.md). No script-to-pkg migration is provided.
+
 ## Installation
 
 **Option 1 — via git clone (recommended)**
@@ -135,12 +141,14 @@ For future upgrades, check out the next explicit release tag in a separate direc
 
 Refresh the browser (`Ctrl+F5`) and open **VPN → Xray**.
 
-1. **Subscriptions** → Add subscription. Choose an HTTPS URL or paste VLESS links, then **Save and refresh**. Review the node list.
-2. **Instances** → create or edit an instance. In **Traffic Selection**, choose **Manual** (one subscription and active node) or **LeastLoad** (selected pool across sources and explicit fallback).
-3. Optional: turn on **Sniffing** and add ordered **Custom Routing Rules**. The private-network Direct bypass stays first; rules run before the default Manual or LeastLoad route. **BitTorrent → Direct** bypasses the VPN exit.
-4. Set the unique **TUN interface**, SOCKS listener/port, and **Bypass Networks** appropriate to this instance.
-5. **Save**, then **Validate saved configuration**. On the **General** tab, enable Xray (and Watchdog if desired), then press **Apply**.
-6. Confirm traffic from a test client, check the service status, and inspect the exact applied JSON in **Advanced**. The Advanced JSON contains connection credentials.
+1. **General** (the default page and first tab) → check **Enable Xray**, then **Save** and **Apply**. This is the **global master switch**. The **Instances** page now shows a warning and disables Start controls when the global switch is off. A checked **Enabled** box on an individual instance does **not** start Xray or tun2socks while General → Enable Xray is off. Watchdog is optional.
+2. **Subscriptions** → Add subscription. Choose an HTTPS URL or paste VLESS links, then **Save and refresh**. Review the node list.
+3. **Instances** → create or edit an instance. In **Traffic Selection**, choose **Manual** (one subscription and active node) or **LeastLoad** (selected pool across sources and explicit fallback).
+4. Optional: turn on **Sniffing** and add ordered **Custom Routing Rules**. The private-network Direct bypass stays first; rules run before the default Manual or LeastLoad route. **BitTorrent → Direct** bypasses the VPN exit.
+5. Set the unique **TUN interface**, SOCKS listener/port, and **Bypass Networks** appropriate to this instance. **Save**, **Validate saved configuration**, then **Apply** and start the instance.
+6. Confirm traffic from a test client, check service status, and inspect the exact applied JSON in **Advanced**. The Advanced JSON contains connection credentials.
+
+All six sections (**General**, **Instances**, **Subscriptions**, **Diagnostics**, **Log**, **Advanced**) are accessible through the VPN → Xray sidebar as well as the tabs at the top of the page.
 
 Pasted-link sources refresh manually. URL subscriptions are checked by cron every 15 minutes, but downloaded only when their configured refresh interval is due (default: six hours). Set an interval of 0 to disable automatic refresh.
 

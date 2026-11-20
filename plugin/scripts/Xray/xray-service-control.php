@@ -7,13 +7,13 @@ require_once __DIR__ . '/xray-config.php';
 require_once __DIR__ . '/xray-apply.php';
 
 // ─── Shared constants (not per-instance) ─────────────────────────────────────
-define('XRAY_BIN',          '/usr/local/bin/xray-core');
+define('XRAY_BIN',          '/usr/local/bin/xray');
 define('XRAY_CONF_DIR',     '/usr/local/etc/xray-core');
-define('T2S_BIN',           '/usr/local/tun2socks/tun2socks');
+define('T2S_BIN',           '/usr/local/libexec/os-xray/tun2socks');
 define('T2S_CONF_DIR',      '/usr/local/tun2socks');
 // BUG-7 FIX: stderr демонов в лог-файл вместо /dev/null
 define('XRAY_DAEMON_LOG',   '/var/log/xray-core.log'); // общий лог (fallback)
-define('XRAY_VERSION_FILE', '/usr/local/opnsense/mvc/app/models/OPNsense/Xray/version.txt');
+define('XRAY_VERSION_FILE', '/usr/local/opnsense/version/xray');
 
 function xray_valid_instance_uuid(string $uuid): bool
 {
@@ -337,6 +337,7 @@ function proc_start(string $bin, string $args, string $pidfile, string $logfile 
 {
     // daemon(8) detaches itself; do not add an untracked background shell.
     $log = escapeshellarg($logfile !== '' ? $logfile : XRAY_DAEMON_LOG);
+    if ($bin === XRAY_BIN) putenv('XRAY_LOCATION_ASSET=/usr/local/share/xray-core');
     exec('/usr/sbin/daemon -p ' . escapeshellarg($pidfile)
        . ' ' . escapeshellarg($bin) . ' ' . $args . ' >> ' . $log . ' 2>&1', $out, $rc);
     return $rc === 0;
@@ -353,6 +354,7 @@ function xray_validate_config(string $confFile): bool
         echo "ERROR: config file not found after write: {$confFile}\n";
         return false;
     }
+    putenv('XRAY_LOCATION_ASSET=/usr/local/share/xray-core');
     exec(escapeshellarg(XRAY_BIN) . ' run -test -c ' . escapeshellarg($confFile) . ' -format=json 2>&1', $out, $rc);
     if ($rc !== 0) {
         echo "ERROR: xray config validation failed:\n" . implode("\n", $out) . "\n";
@@ -658,7 +660,9 @@ switch ($action) {
         exit(0);
 
     case 'version':
-        $ver = file_exists(XRAY_VERSION_FILE) ? trim(file_get_contents(XRAY_VERSION_FILE)) : 'unknown';
+        $info = json_decode((string)@file_get_contents(XRAY_VERSION_FILE), true);
+        $ver = is_array($info) && is_string($info['product_version'] ?? null)
+            ? $info['product_version'] : 'unknown';
         echo json_encode(['version' => $ver]) . "\n";
         break;
 

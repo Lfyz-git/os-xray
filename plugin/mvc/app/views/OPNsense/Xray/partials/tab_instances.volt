@@ -1,5 +1,11 @@
 <!-- INSTANCES -->
-<div id="instances" class="tab-pane fade in active">
+<div id="instances" class="tab-pane fade in">
+    {# A new native installation starts with General → Enable Xray switched off. #}
+    <div id="xrayGlobalDisabledNotice" class="alert alert-warning" role="alert" style="display:none; margin:12px 15px;">
+        <strong>{{ lang._('Xray is disabled globally.') }}</strong>
+        {{ lang._('Enable Xray in General and click Apply before starting an instance.') }}
+        <a href="#general" class="alert-link">{{ lang._('Open General') }}</a>.
+    </div>
 
     {# ── Service toolbar ─────────────────────────────────────────────── #}
     <div class="row">

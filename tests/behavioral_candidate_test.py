@@ -20,9 +20,11 @@ if sys.argv[1:]==['version']:
 assert sys.argv[1:4]==['run','-test','-c'],sys.argv
 assert sys.argv[5:]==['-format=json'],sys.argv
 p=Path(sys.argv[4])
+assert p.suffix == '.json', f'Xray requires JSON candidate extension: {p.name}'
 assert p.stat().st_mode & 0o777==0o600
 config=json.loads(p.read_text())
-Path(__file__).with_name('candidate-record.json').write_text(json.dumps({'path':str(p),'config':config}))
+assert p.parent.stat().st_mode & 0o777 == 0o700
+Path(__file__).with_name('candidate-record.json').write_text(json.dumps({'path':str(p),'dir':str(p.parent),'config':config}))
 if config['outbounds'][0].get('tag')=='reject':
     print('test fixture rejects this outbound'); sys.exit(23)
 print('Configuration OK')
@@ -30,7 +32,7 @@ print('Configuration OK')
     core.chmod(0o755)
     controller=d/'xray-service-control.php'
     text=(ROOT/'plugin/scripts/Xray/xray-service-control.php').read_text()
-    text=text.replace("'/usr/local/bin/xray-core'",repr(str(core)))
+    text=text.replace("'/usr/local/bin/xray'",repr(str(core)))
     controller.write_text(text)
     for name in ['xray-config.php','xray-apply.php']:
         (d/name).symlink_to(ROOT/'plugin/scripts/Xray'/name)
@@ -54,6 +56,7 @@ class Config {
     assert 'OK: config is valid' in good.stdout
     record=json.loads((d/'candidate-record.json').read_text())
     assert not Path(record['path']).exists()
+    assert not Path(record['dir']).exists()
     assert record['config']['inbounds'][0]['port']==19080
     assert record['config']['inbounds'][0]['settings']['udp'] is True
     assert len(record['config']['inbounds'])==1
@@ -62,6 +65,7 @@ class Config {
     bad=run(); assert bad.returncode==1 and 'test fixture rejects' in bad.stdout,bad.stdout+bad.stderr
     record=json.loads((d/'candidate-record.json').read_text())
     assert not Path(record['path']).exists()
+    assert not Path(record['dir']).exists()
     xml('{'); malformed=run(); assert malformed.returncode==1,malformed.stdout
     xml('{"protocol":"freedom"}')
     assert run('invalid').returncode==1

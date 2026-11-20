@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refresh the OPNsense sidebar after a native os-xray installation/upgrade.
+# OPNsense MenuSystem caches Menu.xml for up to one hour. Installing a new
+# package with additional sections must not leave stale navigation visible.
+# Removing this cache is safe: OPNsense regenerates it on the next request.
+rm -f /tmp/opnsense_menu_cache.xml

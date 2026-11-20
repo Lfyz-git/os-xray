@@ -7,6 +7,42 @@
             });
         }
 
+        // ── Global master switch state ───────────────────────────
+        // Instance-level Enabled does not override General → Enable Xray.
+        // Read the saved model (not an unsaved checkbox) to keep Start controls
+        // and the warning consistent with the controller's effective state.
+        var globalXrayEnabled = null;
+        function syncGlobalStartControls() {
+            var disabled = globalXrayEnabled === false;
+            $('#xrayGlobalDisabledNotice').toggle(disabled);
+            $('#grid-instances .cmd-inst-start').prop('disabled', disabled);
+            var anyRunning = false;
+            $.each(instanceStatusCache, function (uuid, info) {
+                if (info.xray_core === 'running' || info.tun2socks === 'running') {
+                    anyRunning = true;
+                }
+            });
+            $('#btnStartAll').prop('disabled', disabled || anyRunning);
+        }
+        function refreshGlobalXrayEnabled() {
+            return $.ajax({
+                url: '/api/xray/general/get', type: 'GET', dataType: 'json'
+            }).done(function (data) {
+                var settings = data && data.general;
+                if (settings && typeof settings.enabled !== 'undefined') {
+                    globalXrayEnabled = settings.enabled === true || String(settings.enabled) === '1';
+                } else {
+                    globalXrayEnabled = null;
+                }
+                syncGlobalStartControls();
+            }).fail(function () {
+                // No guess on failed API reads; the backend still rejects
+                // Start when disabled, even if the GUI cannot query the flag.
+                globalXrayEnabled = null;
+                syncGlobalStartControls();
+            });
+        }
+
         // ── Per-instance status overlay ───────────────────────────
         var instanceStatusCache = {};
         var instanceTestCache   = {};
@@ -107,6 +143,7 @@
         $('#grid-instances').on('loaded.rs.jquery.bootgrid', function () {
             refreshInstancesStatus();
             populateInstanceSelects();
+            syncGlobalStartControls();
         });
 
         // Per-instance start / stop / test (row button handlers)
@@ -131,6 +168,10 @@
         });
 
         function instanceServiceAction(action, uuid) {
+            if (action === 'start' && globalXrayEnabled === false) {
+                $('#maintabs a[href="#general"]').tab('show');
+                return;
+            }
             var url = '/api/xray/service/' + action + (uuid ? '/' + encodeURIComponent(uuid) : '');
             $.ajax({
                 url: url, type: 'POST', dataType: 'json',
@@ -142,6 +183,7 @@
         mapDataToFormUI({'frm_general_settings': "/api/xray/general/get"}).done(function () {
             formatTokenizersUI();
             $('.selectpicker').selectpicker('refresh');
+            refreshGlobalXrayEnabled();
         });
 
         // ── Apply (save general, then reconfigure) ──────────────────
@@ -181,9 +223,10 @@
 
                 // Update per-instance status in grid
                 applyStatusToGrid();
+                syncGlobalStartControls();
 
                 var running = xok || tok;
-                $('#btnStartAll').prop('disabled', running);
+                $('#btnStartAll').prop('disabled', running || globalXrayEnabled === false);
                 $('#btnStopAll').prop('disabled', !running);
                 $('#btnRestartAll').prop('disabled', !running);
             });
@@ -456,6 +499,52 @@
             loadLog("/api/xray/service/xraylog", 'logCoreContent', 'logCoreRefreshBtn');
         });
 
+        // ── Native Xray-core package management ─────────────────────
+        var corePkgState = null;
+        var corePkgBusy = false;
+        function showCorePackage(data) {
+            corePkgState = data || {};
+            var ok = corePkgState.result === 'ok';
+            $('#xrayCorePackageInstalled').text(corePkgState.installed || '—');
+            $('#xrayCorePackageAvailable').text(corePkgState.available || '—');
+            $('#xrayCorePackageRepository').text(corePkgState.repository || 'OPNsense');
+            $('#xrayCorePackageMessage')
+                .toggleClass('text-danger', !ok)
+                .text(corePkgState.message || (corePkgState.update_available
+                    ? 'Core update available; running tunnels will be briefly stopped and restarted.'
+                    : (ok ? 'No update available.' : 'Unavailable.')));
+            $('#xrayCorePackageUpgrade').prop('disabled',
+                corePkgBusy || !ok || !corePkgState.update_available);
+        }
+        function corePackageRequest(url, method) {
+            corePkgBusy = true;
+            $('#xrayCorePackageCheck,#xrayCorePackageUpgrade').prop('disabled', true);
+            $('#xrayCorePackageMessage').removeClass('text-danger').text('Working…');
+            return $.ajax({ url: url, method: method, dataType: 'json', timeout: 300000 })
+                .done(showCorePackage)
+                .fail(function (xhr) {
+                    showCorePackage({result: 'error', message: 'Core package request failed: HTTP ' + xhr.status});
+                })
+                .always(function () {
+                    corePkgBusy = false;
+                    $('#xrayCorePackageCheck').prop('disabled', false);
+                    if (corePkgState) showCorePackage(corePkgState);
+                });
+        }
+        $('a[href="#advanced"]').on('shown.bs.tab', function () {
+            if (!corePkgState && !corePkgBusy) {
+                corePackageRequest('/api/xray/service/corepackage', 'GET');
+            }
+        });
+        $('#xrayCorePackageCheck').on('click', function () {
+            corePackageRequest('/api/xray/service/corepackagecheck', 'POST');
+        });
+        $('#xrayCorePackageUpgrade').on('click', function () {
+            if (!corePkgState || !corePkgState.update_available) return;
+            if (!confirm('Update Xray-core from the OPNsense repository? Running VPN tunnels will be stopped temporarily and restarted on successful validation. Connections will be interrupted. If the upgrade fails, tunnels may remain stopped. Continue?')) return;
+            corePackageRequest('/api/xray/service/corepackageupgrade', 'POST');
+        });
+
         // ── Copy Debug Info ─────────────────────────────────────────
         $('#btnCopyDebug').click(function () {
             var $btn = $(this).prop('disabled', true);
@@ -500,12 +589,23 @@
             });
         });
 
-        // ── Tab hash ────────────────────────────────────────────────
-        if (window.location.hash !== "") {
-            $('a[href="' + window.location.hash + '"]').click();
+        $('#maintabs a[href="#instances"]').on('shown.bs.tab', refreshGlobalXrayEnabled);
+
+        // ── Sidebar links and tab URL hashes ────────────────────────
+        // Sidebar entries use /ui/xray/#<tab>. Handle both initial page
+        // loading and same-page hash navigation without a full reload.
+        var xrayTabs = ['#general', '#instances', '#subscriptions', '#diagnostics', '#logs', '#advanced'];
+        function activateXrayTabFromHash() {
+            var hash = window.location.hash || '#general';
+            if (xrayTabs.indexOf(hash) === -1) return;
+            $('#maintabs a[href="' + hash + '"]').tab('show');
         }
-        $('.nav-tabs a').on('shown.bs.tab', function (e) {
-            history.pushState(null, null, e.target.hash);
+        $(window).on('hashchange', activateXrayTabFromHash);
+        activateXrayTabFromHash();
+        $('#maintabs a').on('shown.bs.tab', function (e) {
+            if (window.location.hash !== e.target.hash) {
+                history.pushState(null, '', e.target.hash);
+            }
         });
     });
 </script>
