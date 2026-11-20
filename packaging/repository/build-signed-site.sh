@@ -24,9 +24,9 @@ openssl pkey -in "$KEY" -noout >/dev/null 2>&1 || {
 
 REPO="$SITE/FreeBSD:15:amd64/26.7/test/repo"
 mkdir -p "$REPO" "$SITE/Keys"
-[ -f "$PKG_DIR/os-xray-3.3.0.pkg" ] || { echo "Missing os-xray-3.3.0.pkg" >&2; exit 1; }
+[ -f "$PKG_DIR/os-xray-3.3.0_1.pkg" ] || { echo "Missing os-xray-3.3.0_1.pkg" >&2; exit 1; }
 [ -f "$PKG_DIR/xray-tun2socks-2.7.0.pkg" ] || { echo "Missing xray-tun2socks-2.7.0.pkg" >&2; exit 1; }
-cp "$PKG_DIR/os-xray-3.3.0.pkg" "$REPO/"
+cp "$PKG_DIR/os-xray-3.3.0_1.pkg" "$REPO/"
 cp "$PKG_DIR/xray-tun2socks-2.7.0.pkg" "$REPO/"
 openssl pkey -in "$KEY" -pubout -out "$SITE/Keys/repo.pub" 2>/dev/null
 
