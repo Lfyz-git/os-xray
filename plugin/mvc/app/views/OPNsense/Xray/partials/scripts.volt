@@ -7,6 +7,42 @@
             });
         }
 
+        // ── Global master switch state ───────────────────────────
+        // Instance-level Enabled does not override General → Enable Xray.
+        // Read the saved model (not an unsaved checkbox) to keep Start controls
+        // and the warning consistent with the controller's effective state.
+        var globalXrayEnabled = null;
+        function syncGlobalStartControls() {
+            var disabled = globalXrayEnabled === false;
+            $('#xrayGlobalDisabledNotice').toggle(disabled);
+            $('#grid-instances .cmd-inst-start').prop('disabled', disabled);
+            var anyRunning = false;
+            $.each(instanceStatusCache, function (uuid, info) {
+                if (info.xray_core === 'running' || info.tun2socks === 'running') {
+                    anyRunning = true;
+                }
+            });
+            $('#btnStartAll').prop('disabled', disabled || anyRunning);
+        }
+        function refreshGlobalXrayEnabled() {
+            return $.ajax({
+                url: '/api/xray/general/get', type: 'GET', dataType: 'json'
+            }).done(function (data) {
+                var settings = data && data.general;
+                if (settings && typeof settings.enabled !== 'undefined') {
+                    globalXrayEnabled = settings.enabled === true || String(settings.enabled) === '1';
+                } else {
+                    globalXrayEnabled = null;
+                }
+                syncGlobalStartControls();
+            }).fail(function () {
+                // No guess on failed API reads; the backend still rejects
+                // Start when disabled, even if the GUI cannot query the flag.
+                globalXrayEnabled = null;
+                syncGlobalStartControls();
+            });
+        }
+
         // ── Per-instance status overlay ───────────────────────────
         var instanceStatusCache = {};
         var instanceTestCache   = {};
@@ -107,6 +143,7 @@
         $('#grid-instances').on('loaded.rs.jquery.bootgrid', function () {
             refreshInstancesStatus();
             populateInstanceSelects();
+            syncGlobalStartControls();
         });
 
         // Per-instance start / stop / test (row button handlers)
@@ -131,6 +168,10 @@
         });
 
         function instanceServiceAction(action, uuid) {
+            if (action === 'start' && globalXrayEnabled === false) {
+                $('#maintabs a[href="#general"]').tab('show');
+                return;
+            }
             var url = '/api/xray/service/' + action + (uuid ? '/' + encodeURIComponent(uuid) : '');
             $.ajax({
                 url: url, type: 'POST', dataType: 'json',
@@ -142,6 +183,7 @@
         mapDataToFormUI({'frm_general_settings': "/api/xray/general/get"}).done(function () {
             formatTokenizersUI();
             $('.selectpicker').selectpicker('refresh');
+            refreshGlobalXrayEnabled();
         });
 
         // ── Apply (save general, then reconfigure) ──────────────────
@@ -181,9 +223,10 @@
 
                 // Update per-instance status in grid
                 applyStatusToGrid();
+                syncGlobalStartControls();
 
                 var running = xok || tok;
-                $('#btnStartAll').prop('disabled', running);
+                $('#btnStartAll').prop('disabled', running || globalXrayEnabled === false);
                 $('#btnStopAll').prop('disabled', !running);
                 $('#btnRestartAll').prop('disabled', !running);
             });
@@ -545,6 +588,8 @@
                 $btn.prop('disabled', false);
             });
         });
+
+        $('#maintabs a[href="#instances"]').on('shown.bs.tab', refreshGlobalXrayEnabled);
 
         // ── Sidebar links and tab URL hashes ────────────────────────
         // Sidebar entries use /ui/xray/#<tab>. Handle both initial page

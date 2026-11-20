@@ -24,6 +24,24 @@ jobs:
           import xml.etree.ElementTree as ET
           for path in pathlib.Path('plugin/mvc/app/models/OPNsense/Xray').glob('*.xml'):
               ET.parse(path)
+          # Native GUI: six sidebar destinations, General first and visible,
+          # and a disabled-master warning which refreshes from the saved API.
+          menu = ET.parse('plugin/mvc/app/models/OPNsense/Xray/Menu/Menu.xml')
+          links = menu.findall('./VPN/Xray/*')
+          assert [x.tag for x in links] == [
+              'General', 'Instances', 'Subscriptions', 'Diagnostics', 'Log', 'Advanced']
+          view = pathlib.Path('plugin/mvc/app/views/OPNsense/Xray/general.volt').read_text()
+          assert '<li class="active"><a data-toggle="tab" href="#general">' in view
+          inst = pathlib.Path('plugin/mvc/app/views/OPNsense/Xray/partials/tab_instances.volt').read_text()
+          js = pathlib.Path('plugin/mvc/app/views/OPNsense/Xray/partials/scripts.volt').read_text()
+          assert 'id="xrayGlobalDisabledNotice"' in inst
+          assert "url: '/api/xray/general/get'" in js
+          assert "syncGlobalStartControls()" in js
+          assert "on('hashchange', activateXrayTabFromHash)" in js
+          hook = pathlib.Path('packaging/native/+POST_INSTALL.post').read_text()
+          build = pathlib.Path('packaging/native/build.sh').read_text()
+          assert '/tmp/opnsense_menu_cache.xml' in hook
+          assert 'cp "$ROOT/packaging/native/+POST_INSTALL.post"' in build
           PY
           node - <<'NODE'
           const fs = require('fs');
