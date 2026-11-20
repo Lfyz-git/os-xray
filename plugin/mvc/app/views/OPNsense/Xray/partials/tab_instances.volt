@@ -1,5 +1,5 @@
 <!-- INSTANCES -->
-<div id="instances" class="tab-pane fade in active">
+<div id="instances" class="tab-pane fade in">
 
     {# ── Service toolbar ─────────────────────────────────────────────── #}
     <div class="row">
